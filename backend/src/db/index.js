@@ -28,6 +28,7 @@ export async function connectDB() {
     return mode;
   }
   try {
+    mongoose.set('bufferCommands', false);
     mongoose.set('strictQuery', true);
     await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 5000 });
     mode = 'mongo';

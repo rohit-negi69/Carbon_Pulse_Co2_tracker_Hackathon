@@ -1,0 +1,17 @@
+{
+  "name": "carbonpulse",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run build --workspace=carbonpulse-frontend && node backend/src/server.js",
+    "build": "npm run build --workspace=carbonpulse-frontend",
+    "start": "node backend/src/server.js",
+    "test": "npm test --workspace=carbonpulse-backend",
+    "lint": "node --check backend/src/server.js backend/src/app.js"
+  }
+}

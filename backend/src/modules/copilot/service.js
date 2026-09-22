@@ -1,5 +1,6 @@
 import * as activityRepository from '../../db/repositories/activityRepository.js';
 import * as targetRepository from '../../db/repositories/targetRepository.js';
+import * as factorRepository from '../../db/repositories/factorRepository.js';
 import * as activities from '../activities/service.js';
 import { currentWeekRange } from '../../domain/week.js';
 import { ruleReply } from './engine.js';
