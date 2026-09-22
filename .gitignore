@@ -10,3 +10,6 @@ backend/data/
 .vercel
 frontend/preview.html
 .freebuff/
+.vite/
+node_modules/
+
