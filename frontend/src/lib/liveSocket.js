@@ -259,7 +259,7 @@ export class LiveConnection {
       this._onEvent(name, data, event.lastEventId ? Number(event.lastEventId) : null);
     };
 
-    ['snapshot', 'presence', 'telemetry', 'grid', 'activity', 'deleted', 'target', 'nudge', 'typing'].forEach((name) =>
+    ['snapshot', 'presence', 'telemetry', 'grid', 'activity', 'deleted', 'target', 'nudge', 'typing', 'trip'].forEach((name) =>
       source.addEventListener(name, forward(name))
     );
 

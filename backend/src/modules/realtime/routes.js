@@ -110,7 +110,7 @@ router.get('/realtime', (_req, res) => {
     ],
     registeredTransports: transportNames(),
     socketCommands: COMMANDS,
-    events: ['hello', 'snapshot', 'activity', 'deleted', 'target', 'nudge', 'presence', 'typing', 'telemetry', 'grid'],
+    events: ['hello', 'snapshot', 'activity', 'deleted', 'target', 'nudge', 'presence', 'typing', 'telemetry', 'grid', 'trip'],
     lifecycle: {
       sequenced: true,
       replayBuffer: metrics().replayBuffer,
