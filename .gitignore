@@ -6,7 +6,7 @@ build/
 .env.production
 *.log
 .DS_Store
-server/data/
+backend/data/
 .vercel
-client/preview.html
+frontend/preview.html
 .freebuff/

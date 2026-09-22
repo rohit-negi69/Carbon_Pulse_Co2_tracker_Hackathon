@@ -36,7 +36,7 @@ Layered: browser → React frontend → Express API layer (calculation engine, a
 See **[ARCHITECTURE.md](ARCHITECTURE.md)** for the full diagram, the calculation flow, the module map, and why this build uses MongoDB + SSE.
 
 ```
-server/src/                       client/src/
+backend/src/                       frontend/src/
 ├── config/                       ├── app/App.jsx
 ├── domain/    factors · week     ├── features/
 ├── db/        connection         │   ├── dashboard/    dashboard
@@ -70,23 +70,23 @@ Prerequisites: Node 18+.
 
 ```bash
 # 0) Tests (optional but recommended)
-cd server && npm install && npm test     # 15 API tests, node:test — no extra deps
+cd backend && npm install && npm test    # 15 API tests, node:test — no extra deps
 
 # 1) Backend  (terminal 1)
-cd server
+cd backend
 npm install
 npm run dev            # http://localhost:3001   (optionally: MONGODB_URI="mongodb+srv://..." npm run dev)
 #                      # API docs: http://localhost:3001/api/docs
 
 # 2) Frontend (terminal 2)
-cd client
+cd frontend
 npm install
 npm run dev            # http://localhost:5173  (proxies /api → :3001)
 ```
 
 Open **http://localhost:5173**. No environment variables are required to use every feature.
 
-To enable the optional LLM upgrade, add a `server/.env`:
+To enable the optional LLM upgrade, add a `backend/.env`:
 
 ```
 MONGODB_URI=mongodb+srv://user:pass@cluster/carbonpulse
@@ -101,17 +101,17 @@ CLIENT_ORIGIN=http://localhost:5173
 
 ## ☁️ Deploy to Vercel (2 projects)
 
-### 1. Backend — root directory `server/`
+### 1. Backend — root directory `backend/`
 1. Push this repo to GitHub, then in Vercel: **Add New → Project → import the repo**.
-2. Set **Root Directory** to `server`.
+2. Set **Root Directory** to `backend`.
 3. Environment variables:
    - `MONGODB_URI` — MongoDB Atlas connection string
    - `CLIENT_ORIGIN` — the frontend URL (for CORS)
    - `OPENAI_API_KEY` — *optional*
 4. Deploy and note the URL, e.g. `https://carbonpulse-api.vercel.app`.
 
-### 2. Frontend — root directory `client/`
-1. **Add New → Project → import the same repo**, set **Root Directory** to `client`.
+### 2. Frontend — root directory `frontend/`
+1. **Add New → Project → import the same repo**, set **Root Directory** to `frontend`.
 2. Add `VITE_API_URL` = `https://carbonpulse-api.vercel.app/api`.
 3. Deploy — share **this** URL as the submission link.
 
@@ -153,11 +153,11 @@ CLIENT_ORIGIN=http://localhost:5173
 
 ## 📁 Project structure
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the annotated tree. In short: the backend is a modular monolith (`server/src/modules/*` — one folder per capability in the architecture diagram) over a repository-based data layer, and the frontend is feature-sliced (`client/src/features/*`) with one folder per diagram tile.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the annotated tree. In short: the backend is a modular monolith (`backend/src/modules/*` — one folder per capability in the architecture diagram) over a repository-based data layer, and the frontend is feature-sliced (`frontend/src/features/*`) with one folder per diagram tile.
 
 ```
-server/src/modules/   activities · calculation · analytics · targets · nudges · copilot · realtime · health
-client/src/features/  dashboard · activities · insights · targets · history · nudges · copilot
+backend/src/modules/   activities · calculation · analytics · targets · nudges · copilot · realtime · health
+frontend/src/features/  dashboard · activities · insights · targets · history · nudges · copilot
 ```
 
 | Root file | Purpose |

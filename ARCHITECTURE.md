@@ -69,7 +69,7 @@ Broadcast over SSE  ──▶  dashboard, charts, target progress, copilot refre
 ## Backend module map
 
 ```
-server/
+backend/
 ├── src/
 │   ├── config/index.js              env + product constants (single source for process.env)
 │   ├── domain/
@@ -99,7 +99,7 @@ server/
 ## Frontend map
 
 ```
-client/src/
+frontend/src/
 ├── app/App.jsx                      shell: tabs, live subscription, toasts, overlays
 ├── features/
 │   ├── dashboard/                   DashboardPage      → totals, breakdown, weekly progress
@@ -142,8 +142,8 @@ client/src/
 ## Deployment (example)
 
 ```
-Frontend  → Vercel   (client/, static build)
-Backend   → Vercel   (server/, Node runtime)
+Frontend  → Vercel   (frontend/, static build)
+Backend   → Vercel   (backend/, Node runtime)
 Database  → MongoDB Atlas (MONGODB_URI)
 Versioning→ GitHub
 Secrets   → Environment variables (MONGODB_URI, optional OPENAI_API_KEY, CLIENT_ORIGIN)
