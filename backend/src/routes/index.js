@@ -8,6 +8,8 @@ import targetRoutes from '../modules/targets/routes.js';
 import nudgeRoutes from '../modules/nudges/routes.js';
 import copilotRoutes from '../modules/copilot/routes.js';
 import realtimeRoutes from '../modules/realtime/routes.js';
+import mlRoutes from '../modules/ml/routes.js';
+import trackingRoutes from '../modules/tracking/routes.js';
 
 // ---------------------------------------------------------------------------
 // REST API surface. Every feature module contributes its own router; this file
@@ -23,6 +25,8 @@ api.use(analyticsRoutes);    // /dashboard, /week, /insights, /export
 api.use(targetRoutes);       // /target                           (weekly target)
 api.use(nudgeRoutes);        // /nudges                           (alerts & nudges)
 api.use(copilotRoutes);      // /chat, /ai/audit                  (AI layer)
+api.use(mlRoutes);           // /ml/*                             (ML models)
+api.use(trackingRoutes);     // /tracking/*                       (real GPS tracking)
 api.use(realtimeRoutes);     // /stream                           (real-time hub)
 
 export default api;

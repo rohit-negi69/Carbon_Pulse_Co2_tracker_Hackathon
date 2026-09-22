@@ -14,6 +14,8 @@ export const memory = {
   notifications: [],
   history: [],
   summaries: [],
+  trips: [],
+  trainingExamples: [],
   target: { weeklyTarget: config.defaultWeeklyTarget, history: [] },
   seq: 1,
 };

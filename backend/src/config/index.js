@@ -17,6 +17,10 @@ export const config = {
   carbonDataKey: process.env.CARBON_DATA_API_KEY || '',
   geoKey: process.env.GEO_API_KEY || '',
 
+  // Real-time
+  tickMs: Number(process.env.REALTIME_TICK_MS) > 0 ? Number(process.env.REALTIME_TICK_MS) : 4000,
+  gridRegion: process.env.GRID_REGION || 'IN',
+
   // Product defaults
   defaultWeeklyTarget: 50, // kg CO2 per week
   nudgeWarnRatio: 0.8, // warn at 80% of budget

@@ -76,6 +76,40 @@ const summarySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// A GPS tracking session: raw fixes in, a classified mode and a CO₂ figure out.
+const tripSchema = new mongoose.Schema(
+  {
+    status: { type: String, enum: ['active', 'completed', 'discarded'], default: 'active', index: true },
+    label: { type: String, default: '', trim: true, maxlength: 80 },
+    mode: { type: String, default: 'unknown', index: true },
+    autoMode: { type: String, default: 'unknown' },
+    corrected: { type: Boolean, default: false },
+    distanceKm: { type: Number, default: 0 },
+    durationMin: { type: Number, default: 0 },
+    avgSpeedKmh: { type: Number, default: 0 },
+    maxSpeedKmh: { type: Number, default: 0 },
+    co2: { type: Number, default: 0 },
+    factorUsed: { type: Number, default: 0 },
+    activityType: { type: String, default: null },
+    activityId: { type: String, default: null },
+    points: { type: Array, default: [] },
+    startedAt: Date,
+    endedAt: Date,
+    logged: { type: Boolean, default: false },
+  },
+  { timestamps: true }
+);
+
+// User-confirmed text→category pairs. Feeds online learning for the classifier.
+const trainingExampleSchema = new mongoose.Schema(
+  {
+    label: { type: String, required: true },
+    text: { type: String, required: true, maxlength: 240 },
+    source: { type: String, default: 'confirmed-prediction' },
+  },
+  { timestamps: true }
+);
+
 function model(name, schema) {
   return mongoose.models[name] || mongoose.model(name, schema);
 }
@@ -87,4 +121,6 @@ export const models = {
   Notification: model('Notification', notificationSchema),
   History: model('ActivityHistory', historySchema),
   Summary: model('AnalyticsSummary', summarySchema),
+  Trip: model('Trip', tripSchema),
+  TrainingExample: model('TrainingExample', trainingExampleSchema),
 };

@@ -1,67 +1,66 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createLiveConnection } from './liveSocket.js';
 
-// Live data hook.
-// Primary transport: Server-Sent Events (/api/stream) — the backend pushes an
-// event the moment any session logs, deletes, or changes the target.
-// Fallback: if EventSource is unavailable or the stream drops, we poll every
-// 6s so the dashboard still behaves "live" in every environment.
+// ---------------------------------------------------------------------------
+// useLive — the app's real-time spine.
+//
+// One connection per browser tab, shared by every feature: the header pills,
+// the dashboard, the targets page, the nudge centre and the copilot all read
+// the same pushed state, and every mutation travels back over the same socket.
+// ---------------------------------------------------------------------------
+
 export function useLive(onEvent) {
-  const [status, setStatus] = useState('connecting'); // connecting | live | polling
-  const [clients, setClients] = useState(1);
-  const [lastEvent, setLastEvent] = useState(null);
+  const [state, setState] = useState(null);
+  const connectionRef = useRef(null);
   const handler = useRef(onEvent);
   handler.current = onEvent;
 
+  if (!connectionRef.current) {
+    connectionRef.current = createLiveConnection({
+      onFrame: (frame) => handler.current?.(frame),
+      onState: (next) => setState(next),
+    });
+  }
+
   useEffect(() => {
-    let es;
-    let poll;
-
-    const startPolling = () => {
-      if (poll) return;
-      setStatus('polling');
-      poll = setInterval(() => handler.current?.({ type: 'poll', at: new Date().toISOString() }), 6000);
-    };
-
-    try {
-      es = new EventSource('/api/stream');
-
-      es.addEventListener('hello', (e) => {
-        setStatus('live');
-        try {
-          const data = JSON.parse(e.data);
-          if (typeof data.clients === 'number') setClients(data.clients);
-        } catch {}
-      });
-
-      const forward = (type) => (e) => {
-        setStatus('live');
-        let payload = {};
-        try {
-          payload = JSON.parse(e.data);
-        } catch {}
-        const evt = { type, ...payload, at: new Date().toISOString() };
-        setLastEvent(evt);
-        handler.current?.(evt);
-      };
-
-      es.addEventListener('activity', forward('activity'));
-      es.addEventListener('deleted', forward('deleted'));
-      es.addEventListener('target', forward('target'));
-
-      es.onerror = () => {
-        // Browser auto-reconnects; if it can't, fall back to polling so the UI
-        // keeps updating rather than silently freezing.
-        if (es.readyState === 2) startPolling();
-      };
-    } catch {
-      startPolling();
-    }
-
-    return () => {
-      es?.close();
-      if (poll) clearInterval(poll);
-    };
+    const connection = connectionRef.current;
+    connection.start();
+    return () => connection.stop();
   }, []);
 
-  return { status, clients, lastEvent };
+  const send = useCallback((cmd, payload, options) => connectionRef.current.send(cmd, payload, options), []);
+  const chat = useCallback((message, history, onChunk) => connectionRef.current.chat(message, history, onChunk), []);
+  const notifyTyping = useCallback((typingOn, page) => connectionRef.current.typing(typingOn, page), []);
+
+  return useMemo(
+    () => ({
+      // connection health
+      status: state?.status || 'connecting',
+      transport: state?.transport || 'none',
+      mode: state?.mode || 'websocket',
+      latencyMs: state?.latencyMs ?? null,
+      reconnects: state?.reconnects || 0,
+      lastEventId: state?.lastEventId ?? null,
+      error: state?.error || null,
+
+      // pushed state
+      clients: state?.clients || 1,
+      presence: state?.presence || [],
+      typing: state?.typing || null,
+      snapshot: state?.snapshot || null,
+      metrics: state?.metrics || null,
+      telemetry: state?.telemetry || null,
+      grid: state?.grid || null,
+      log: state?.log || [],
+      lastEvent: state?.lastEvent || null,
+      queueSize: state?.queueSize || 0,
+
+      // actions
+      connection: connectionRef.current,
+      send,
+      chat,
+      notifyTyping,
+    }),
+    [state, send, chat, notifyTyping]
+  );
 }

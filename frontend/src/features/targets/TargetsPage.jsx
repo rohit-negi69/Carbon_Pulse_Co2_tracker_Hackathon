@@ -1,22 +1,31 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
-import { Card, Icon, Progress } from '../../components/ui/index.jsx';
+import { Card, Icon, Progress, SectionHeading, RadialGauge, CountUp, Badge } from '../../components/ui/index.jsx';
 
-export default function WeeklyTarget({ week, refreshKey, onSaved, onToast }) {
+export default function WeeklyTarget({ week, refreshKey, onSaved, onToast, live }) {
   const [value, setValue] = useState('');
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [audit, setAudit] = useState(null);
+  const [liveWeek, setLiveWeek] = useState(null);
 
   useEffect(() => {
     api.audit().then(setAudit).catch(() => {});
   }, [refreshKey]);
 
-  if (!week) return <Card className="p-6 text-on-surface-variant">Loading weekly telemetry…</Card>;
+  // Prefer the pushed snapshot so the ring and pace move the instant anything
+  // is logged, even from another tab.
+  useEffect(() => {
+    if (live?.snapshot?.week) setLiveWeek(live.snapshot.week);
+  }, [live?.snapshot]);
 
-  const { pct, exceeded, pace, daysElapsed, daysRemaining, used, target, elapsedPct } = week;
+  const weekData = liveWeek || week;
+
+  if (!weekData) return <Card className="p-6 text-on-surface-variant">Loading weekly telemetry…</Card>;
+
+  const { pct, exceeded, pace, daysElapsed, daysRemaining, used, target, elapsedPct } = weekData;
   const tone = exceeded ? 'rose' : pct > 80 ? 'amber' : 'primary';
-  const ringColor = exceeded ? '#e11d48' : pct > 80 ? '#d97706' : '#006948';
+  const ringColor = exceeded ? 'rgb(var(--rose))' : pct > 80 ? 'rgb(var(--amber))' : 'rgb(var(--primary))';
 
   const r = 54;
   const circ = 2 * Math.PI * r;
@@ -46,52 +55,34 @@ export default function WeeklyTarget({ week, refreshKey, onSaved, onToast }) {
   }
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="mb-4">
-        <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
-          <span className="h-2 w-2 rounded-full bg-primary" />
-          Weekly budget · Monday 00:00 → Sunday
-        </div>
-        <h1 className="font-headline text-[26px] font-bold tracking-tight text-on-surface md:text-[30px]">Weekly target</h1>
-        <p className="text-[13px] text-on-surface-variant">
-          Set the CO₂ budget you want to live within. CarbonPulse tracks progress live and tells you how the pace compares to
-          the week.
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-5">
+      <SectionHeading
+        className="animate-fade-up"
+        eyebrow={
+          <>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            Weekly budget · Monday 00:00 → Sunday
+          </>
+        }
+        title="Weekly target"
+        subtitle="Set the CO₂ budget you want to live within. CarbonPulse tracks progress live and tells you how the pace compares to the days elapsed."
+      />
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
         <Card className="p-6 xl:col-span-7">
           <div className="flex flex-col items-center gap-6 md:flex-row">
-            <div className="relative h-36 w-36 flex-shrink-0">
-              <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
-                <circle cx="64" cy="64" r={r} fill="none" stroke="#e2e7ff" strokeWidth="11" />
-                <circle
-                  cx="64"
-                  cy="64"
-                  r={r}
-                  fill="none"
-                  stroke={ringColor}
-                  strokeWidth="11"
-                  strokeLinecap="round"
-                  strokeDasharray={`${dash} ${circ}`}
-                  className="transition-all duration-700"
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="tabular font-headline text-[26px] font-bold" style={{ color: ringColor }}>
-                  {pct}%
-                </span>
-                <span className="text-[11px] text-on-surface-variant">of target</span>
-              </div>
+            <div className="flex-shrink-0">
+              <RadialGauge pct={pct} over={exceeded} size={152} stroke={11} label="of target" />
             </div>
 
             <div className="flex-1 text-center md:text-left">
               <div className="tabular font-headline text-[30px] font-bold text-primary">
-                {used.toFixed(1)} kg
+                <CountUp value={used} decimals={1} /> kg
                 <span className="ml-1 text-[13px] font-medium text-on-surface-variant">used of {target} kg</span>
               </div>
               <p className="mt-1 text-[12.5px] text-on-surface-variant">
-                Week {week.start} → {week.end} · day {daysElapsed} of 7 · {daysRemaining} day(s) remaining
+                Week {weekData.start} → {weekData.end} · day {daysElapsed} of 7 · {daysRemaining} day(s) remaining
+                {live?.status === 'live' && <span className="ml-2 text-primary">· live</span>}
               </p>
 
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -127,14 +118,14 @@ export default function WeeklyTarget({ week, refreshKey, onSaved, onToast }) {
           </div>
 
           {exceeded && (
-            <div className="mt-4 rounded-lg border border-amber/25 bg-amber-soft p-3.5 text-[12.5px] leading-snug text-[#92400e]">
+            <div className="mt-4 rounded-xl border border-amber/25 bg-amber-soft p-3.5 text-[12.5px] leading-snug text-amber">
               <strong>You've passed the weekly target — and that's genuinely okay.</strong> We nudge, we don't block or shame:
               logging stays open, your history is untouched, and the point is that you can now see exactly which category moved
               the number. {audit?.nextBestAction ? `Suggested next move: ${audit.nextBestAction}` : ''}
             </div>
           )}
           {!exceeded && daysRemaining === 0 && (
-            <div className="mt-4 rounded-lg bg-emerald-soft p-3.5 text-[12.5px] text-[#065f46]">
+            <div className="mt-4 rounded-xl bg-emerald-soft p-3.5 text-[12.5px] text-emerald">
               Week complete and within budget — a fresh allocation starts Monday 00:00.
             </div>
           )}
@@ -170,7 +161,7 @@ export default function WeeklyTarget({ week, refreshKey, onSaved, onToast }) {
               </button>
             </form>
             {status && (
-              <p className={`mt-3 rounded-lg px-3 py-2 text-[12.5px] font-medium ${status.ok ? 'bg-emerald-soft text-[#065f46]' : 'bg-error-container text-on-error-container'}`}>
+              <p className={`mt-3 rounded-xl px-3 py-2 text-[12.5px] font-medium ${status.ok ? 'bg-emerald-soft text-emerald' : 'bg-error-container text-on-error-container'}`}>
                 {status.text}
               </p>
             )}

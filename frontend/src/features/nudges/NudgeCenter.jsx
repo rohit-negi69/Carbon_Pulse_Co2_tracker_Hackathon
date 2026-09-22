@@ -7,10 +7,10 @@ import { Icon } from '../../components/ui/index.jsx';
 // actionable, and nothing here can block logging.
 
 const KIND_STYLE = {
-  exceeded: { bg: 'bg-rose-soft', fg: 'text-[#9f1239]', dot: '#e11d48', icon: 'alert' },
-  warn: { bg: 'bg-amber-soft', fg: 'text-[#92400e]', dot: '#f59e0b', icon: 'pulse' },
-  insight: { bg: 'bg-surface-container-low', fg: 'text-on-surface', dot: '#006948', icon: 'trend' },
-  info: { bg: 'bg-surface-container-low', fg: 'text-on-surface', dot: '#6d7a72', icon: 'spark' },
+  exceeded: { bg: 'bg-rose-soft', fg: 'text-rose', dot: 'rgb(var(--rose))', icon: 'alert' },
+  warn: { bg: 'bg-amber-soft', fg: 'text-amber', dot: 'rgb(var(--amber))', icon: 'pulse' },
+  insight: { bg: 'bg-primary/8', fg: 'text-primary', dot: 'rgb(var(--primary))', icon: 'trend' },
+  info: { bg: 'bg-surface-container-low', fg: 'text-on-surface', dot: 'rgb(var(--outline))', icon: 'spark' },
 };
 
 export default function NudgeCenter({ refreshKey, live }) {
@@ -53,24 +53,24 @@ export default function NudgeCenter({ refreshKey, live }) {
     }
   }
 
-  return (
-    <div className="relative" ref={wrapRef}>
+  return (      <div className="relative" ref={wrapRef}>
+
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface-variant transition-colors hover:bg-surface-container-low"
+        className="btn-icon relative"
         aria-label="Alerts and nudges"
         aria-expanded={open}
       >
-        <Icon name="pulse" size={17} />
+        <Icon name="pulse" size={17} className={data.unread > 0 ? 'animate-nudge-bounce text-rose' : ''} />
         {data.unread > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose px-1 text-[10px] font-bold text-surface shadow-glow-sm">
             {data.unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-[60] w-[22rem] rounded-xl border border-outline-variant/50 bg-surface-container-lowest p-2 shadow-raised">
+        <div className="absolute right-0 top-11 z-[60] w-[22rem] animate-scale-in rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-2 shadow-pop">
           <div className="flex items-center justify-between px-2 py-1.5">
             <span className="text-[12px] font-semibold text-on-surface">Alerts &amp; nudges</span>
             {data.unread > 0 && (

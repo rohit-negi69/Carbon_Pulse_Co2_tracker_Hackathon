@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
-import { Card, Icon, StatCard, CATEGORY_META, TierPill, tierOf } from '../../components/ui/index.jsx';
+import { Card, Icon, StatCard, CATEGORY_META, TierPill, tierOf, SectionHeading, EmptyState } from '../../components/ui/index.jsx';
 
 const CATEGORIES = [
   { key: '', label: 'All activities', icon: 'dashboard' },
@@ -120,29 +120,28 @@ export default function History({ onToast, refreshKey, live }) {
   }
 
   return (
-    <div className="flex w-full flex-col">
-      {/* Header */}
-      <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-        <div>
-          <div className="mb-1 flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
-            <span className="h-2 w-2 rounded-full bg-primary" />
+    <div className="flex w-full flex-col gap-5">
+      <SectionHeading
+        className="animate-fade-up"
+        eyebrow={
+          <>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             <span>Audit trail · continuous ledger</span>
             <span className="text-outline">•</span>
-            <span className="text-secondary">{live?.status === 'live' ? 'streaming live' : 'sync mode'}</span>
-          </div>
-          <h1 className="font-headline text-[26px] font-bold tracking-tight text-on-surface md:text-[30px]">
-            Activity History &amp; Filters
-          </h1>
-        </div>
-        <div className="flex items-center gap-2">
+            <span className="text-primary">{live?.status === 'live' ? 'streaming live' : 'sync mode'}</span>
+          </>
+        }
+        title="Activity history & filters"
+        subtitle="Every entry ever written, filterable by category, date window, intensity band and free text — with server-side export."
+        actions={
           <button onClick={exportCsv} className="btn-secondary">
             <Icon name="download" size={15} className="text-primary" /> Export CSV
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stat ribbon */}
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Filtered activities"
           icon="history"

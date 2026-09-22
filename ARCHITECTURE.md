@@ -6,9 +6,9 @@ Track. Understand. Reduce. A cleaner tomorrow.
 ┌──────────────────────┐      HTTPS       ┌────────────────────────────────────────────────┐
 │  User (Web / Mobile) │ ───────────────▶ │  Frontend — React + Vite + Tailwind            │
 │  Responsive browser  │ ◀─────────────── │  Dashboard · Log Activity · Charts & Insights  │
-│  (no login required) │  JSON + SSE      │  Set Targets · History & Filters · Alerts      │
+│  (no login required) │  JSON + WS       │  Set Targets · History & Filters · Alerts      │
 └──────────────────────┘                  └───────────────────┬────────────────────────────┘
-                                                              │ REST (JSON) + Server-Sent Events
+                                                              │ REST (JSON) + WebSocket (events + commands)
                                                               ▼
                     ┌───────────────────────────────────────────────────────────────────────┐
                     │  Backend API layer — Node.js + Express  (modular monolith)            │
@@ -18,7 +18,7 @@ Track. Understand. Reduce. A cleaner tomorrow.
                     │  modules/targets         weekly target                                 │
                     │  modules/nudges          weekly target nudges + alerts                │
                     │  modules/copilot         chatbot + AI audit                           │
-                    │  modules/realtime        SSE hub (live fan-out)                       │
+                    │  modules/realtime        ws · hub · commands · ticks (live in + out)   │
                     │  modules/health          health, docs, service discovery              │
                     └───────────┬───────────────────────────────────────┬───────────────────┘
                                 │                                       │
@@ -39,7 +39,8 @@ Track. Understand. Reduce. A cleaner tomorrow.
 2. Frontend sends it to `POST /api/activities`.
 3. The backend fetches the emission factor, computes `CO₂ = quantity × factor`, and applies the sanity check.
 4. The activity is stored in MongoDB and appended to the `activity_history` audit trail.
-5. The backend broadcasts the change over SSE; every open session — dashboard, charts, history, copilot — updates live.
+5. The backend publishes the change on the real-time bus; every open session — dashboard, charts, history, copilot — updates live over WebSocket (SSE/polling fallback), no refetching.
+6. The same socket accepts *commands* back (`activity.log`, `target.set`, `chat.ask`, `simulate`, …), so a client can drive the whole app over one connection.
 
 ## CO₂ calculation flow
 
@@ -63,8 +64,30 @@ Store activity in MongoDB  ──▶  append activity_history entry
 Evaluate weekly target nudges (DP1)  ──▶  notifications collection
       │
       ▼
-Broadcast over SSE  ──▶  dashboard, charts, target progress, copilot refresh live
+Publish on the bus  ──▶  dashboard, charts, target progress, copilot refresh live
+                          (sequenced frame → replay buffer → every open transport)
 ```
+
+## Real-time protocol
+
+```
+                        ┌───────────────────────── modules/realtime ─────────────────────────┐
+   browser tab          │  ws.js        RFC 6455 server: handshake, framing, heartbeat,      │
+   ┌───────────┐        │               replay on resume, per-socket command rate limit     │
+   │ liveSocket│ ◀────▶ │  commands.js  cmd → service layer (activities/targets/copilot/…)  │
+   │  WS → SSE │        │  hub.js       client registry + publish + replay buffer + metrics  │
+   │  → polling│        │  ticks.js     always-on ticker: telemetry + grid intensity         │
+   └───────────┘        │  snapshot.js  pre-aggregated state pushed on connect / change      │
+                        └──────────────────────────────────────────────────────────────────┘
+  inbound (server → client): hello · snapshot · activity · deleted · target · nudge ·
+                             presence · typing · telemetry* · grid*        (* ephemeral: not replayed)
+  outbound (client → server): { id, cmd, payload }  →  { kind: 'ack' | 'stream' | 'error' }
+```
+
+- **One bus, three transports.** WebSocket, SSE and polling share the same hub, so a browser on a fallback sees identical frames.
+- **No gaps.** Every frame carries a sequence id; reconnecting with `lastEventId` replays only what was missed, and ephemeral ticks are excluded so a resume is never flooded.
+- **Bidirectional.** Commands run through the same services as the REST routes (one implementation, two surfaces) and answer with an ack; `chat.ask` emits `stream` frames before its ack.
+- **Self-observing.** The `Live Ops` tab renders transport, latency, event rate, presence, sequence position, command counters and a raw command console from pushed data only.
 
 ## Backend module map
 
@@ -86,14 +109,14 @@ backend/
 │   │   ├── targets/                 routes.js                (weekly target)
 │   │   ├── nudges/                  routes.js · service.js   (alerts & nudges)
 │   │   ├── copilot/                 routes.js · service.js · engine.js · llm.js · audit.js
-│   │   ├── realtime/                routes.js · hub.js       (SSE)
+│   │   ├── realtime/                routes.js · hub.js · ws.js · commands.js · ticks.js
 │   │   └── health/                  routes.js                (health, docs, services)
 │   ├── integrations/                email · carbonData · geo  (optional providers)
 │   ├── middleware/                  errorHandler · validate · rateLimit · requestLog
 │   ├── routes/index.js              mounts every module under /api
 │   ├── app.js                       app assembly (exported for tests)
 │   └── server.js                    bootstrap + listener
-└── test/api.test.js                 15 end-to-end API tests (node:test)
+└── test/                            api · realtime · websocket · tracking · ml  (65 tests, node:test)
 ```
 
 ## Frontend map
@@ -108,27 +131,29 @@ frontend/src/
 │   ├── targets/                     TargetsPage        → weekly budget, pace, DP1/DP3 notes
 │   ├── history/                     HistoryPage        → ledger, filters, search, export
 │   ├── nudges/                      NudgeCenter        → alerts & nudges feed
-│   └── copilot/                     CopilotPanel       → hybrid chat + diagnostic report
+│   ├── copilot/                     CopilotPanel       → hybrid chat + diagnostic report
+│   └── realtime/                    LiveConsole · LiveTicker · GridPulse · PresencePill
 ├── components/
 │   ├── layout/Layout.jsx            header, nav, live badge, DP1 banner, footer
 │   └── ui/index.jsx                 design system primitives + icon set
 └── lib/
     ├── api.js                       typed-ish API client for every module
-    └── useLive.js                   SSE subscription with polling fallback
+    ├── liveSocket.js                transport ladder (WS → SSE → polling), ack correlation, offline queue
+    └── useLive.js                   React binding: pushed state + send/chat/notifyTyping actions
 ```
 
 ## Layered responsibilities
 
 | Layer | Responsibility | Implementation |
 |---|---|---|
-| **Client** | Rendering, interaction, live subscription | React 18, Vite, Tailwind (CarbonPulse tokens), Recharts, `EventSource` |
+| **Client** | Rendering, interaction, live subscription | React 18, Vite, Tailwind (CarbonPulse tokens), Recharts, native `WebSocket` |
 | **API** | Validation, orchestration, HTTP surface | Express routers per module, middleware for validation/rate-limiting/errors |
 | **Domain** | Factors, thresholds, week boundaries, tiers | `domain/factors.js`, `domain/week.js` |
 | **Engine** | Footprint computation, tiers, what-if modelling | `modules/calculation` |
 | **Analytics** | Aggregation, trends, scope split, rollups, export | `modules/analytics` |
 | **Nudges** | Target evaluation and alerting (DP1) | `modules/nudges` + `notifications` collection |
 | **AI** | NL logging, Q&A, audit insights, projections | `modules/copilot` (rules always; LLM optional) |
-| **Real-time** | Fan-out of mutations to all sessions | `modules/realtime` + `GET /api/stream` |
+| **Real-time** | Fan-out of mutations to all sessions **and** command intake | `modules/realtime` (`/api/ws` primary, `/api/stream` fallback) |
 | **Persistence** | Durable storage with graceful degradation | `db/` + `models/` (Mongo → memory fallback) |
 | **Integrations** | Optional external providers, self-reporting | `integrations/` (email, carbon data, geo) |
 
@@ -136,7 +161,7 @@ frontend/src/
 
 - **MongoDB instead of PostgreSQL/Supabase.** The ledger is a single flexible document type (varying units, notes, tiers, scopes); document storage fits it and deploys free in minutes. All access goes through `db/repositories/*`, so swapping drivers is contained.
 - **No authentication.** The hackathon brief forbids login/signup so graders reach every feature directly; the API is keyless by design and the UI carries a "Zero Auth Mode" badge.
-- **SSE rather than WebSockets.** Traffic is one-way (server → browser), SSE reconnects natively, needs no extra dependency, and degrades to polling.
+- **WebSocket hand-rolled on Node's `http` upgrade (no `ws` dependency).** The socket is bidirectional — the UI logs, retargets, simulates and chats over one connection with ack correlation — while SSE and polling remain as fallbacks for proxies that strip upgrades. Keeping the codec in-repo means the transport is testable with Node's built-in client (`backend/test/websocket.test.js`) and adds no supply-chain surface.
 - **Nudges instead of notifications/email.** Brevo/Resend-style email is wired in `integrations/email.js` but disabled without a key; the in-app nudge feed is the primary DP1 surface because it is immediate and always available to graders.
 
 ## Deployment (example)

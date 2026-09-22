@@ -10,7 +10,7 @@ const QUICK_PROMPTS = [
   "I drove 15 km",
 ];
 
-export default function Copilot({ open, onClose, onLogged, seed }) {
+export default function Copilot({ open, onClose, onLogged, seed, live }) {
   const [messages, setMessages] = useState([
     {
       role: 'bot',
@@ -35,22 +35,45 @@ export default function Copilot({ open, onClose, onLogged, seed }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, seed]);
 
+  // Streams the reply token by token so the answer types itself in live.
   async function send(textArg) {
     const text = (textArg ?? input).trim();
     if (!text || busy) return;
     setInput('');
-    setMessages((m) => [...m, { role: 'user', text }]);
+    setMessages((m) => [...m, { role: 'user', text }, { role: 'bot', text: '', streaming: true }]);
     setBusy(true);
     try {
       const history = messages.slice(-8).map((m) => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
-      const res = await api.chat(text, history);
-      setMessages((m) => [...m, { role: 'bot', text: res.reply, engine: res.engine }]);
+      const onChunk = (chunk) => {
+        setMessages((m) => {
+          const next = [...m];
+          const last = next[next.length - 1];
+          next[next.length - 1] = { ...last, text: (last.text || '') + chunk };
+          return next;
+        });
+      };
+
+      // Prefer the live socket (bidirectional, streamed over the same channel);
+      // the transport client falls back to the REST SSE endpoint on its own.
+      live?.notifyTyping?.(true, 'copilot');
+      const res = live?.chat
+        ? await live.chat(text, history, onChunk).finally(() => live.notifyTyping?.(false, 'copilot'))
+        : await api.chatStream(text, history, { onChunk });
+      setMessages((m) => {
+        const next = [...m];
+        next[next.length - 1] = { role: 'bot', text: res.text, engine: res.engine || 'rules', streaming: false };
+        return next;
+      });
       if (res.logged) {
         onLogged?.();
         api.audit().then(setAudit).catch(() => {});
       }
     } catch (err) {
-      setMessages((m) => [...m, { role: 'bot', text: `Sorry — ${err.message}` }]);
+      setMessages((m) => {
+        const next = [...m];
+        next[next.length - 1] = { role: 'bot', text: `Sorry — ${err.message}` };
+        return next;
+      });
     } finally {
       setBusy(false);
     }
@@ -83,7 +106,10 @@ export default function Copilot({ open, onClose, onLogged, seed }) {
               <div className="font-headline text-[15px] font-semibold text-on-surface">Eco-Audit Copilot</div>
               <div className="flex items-center gap-1 text-[11px] font-medium text-primary">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                {audit?.engine ? `${audit.engine} · live ledger` : 'connecting…'}
+                {audit?.engine ? `${audit.engine}` : 'connecting…'}
+                <span className="text-on-surface-variant">
+                  · {live?.status === 'live' ? `${live.transport === 'websocket' ? 'webSocket' : live.transport} stream` : 'offline queue'}
+                </span>
               </div>
             </div>
           </div>
@@ -132,11 +158,14 @@ export default function Copilot({ open, onClose, onLogged, seed }) {
                   }`}
                 >
                   {m.text}
-                  {m.engine === 'llm' && <span className="mt-1 block text-[10px] font-medium text-outline">LLM-assisted reply</span>}
+                  {m.streaming && <span className="ml-0.5 inline-block h-3 w-1.5 animate-pulse bg-primary align-middle" />}
+                  {m.engine === 'llm' && !m.streaming && <span className="mt-1 block text-[10px] font-medium text-outline">LLM-assisted reply</span>}
                 </div>
               </div>
             ))}
-            {busy && <div className="px-1 text-[11px] text-on-surface-variant">Copilot is analysing…</div>}
+            {busy && !messages.some((m) => m.streaming) && (
+              <div className="px-1 text-[11px] text-on-surface-variant">Copilot is analysing…</div>
+            )}
             <div ref={endRef} />
           </div>
         </div>
@@ -163,7 +192,10 @@ export default function Copilot({ open, onClose, onLogged, seed }) {
           >
             <input
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                live?.notifyTyping?.(true, 'copilot');
+              }}
               placeholder='Ask about your logs, or say "I drove 15 km"'
               className="input"
             />

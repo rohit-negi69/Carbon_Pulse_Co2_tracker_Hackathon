@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../../lib/api.js';
-import { Card, Icon, CATEGORY_META, TierPill } from '../../components/ui/index.jsx';
+import { Card, Icon, CATEGORY_META, TierPill, SectionHeading, Badge } from '../../components/ui/index.jsx';
 
 const TYPES = Object.keys(CATEGORY_META);
 
@@ -59,17 +59,18 @@ export default function LogActivity({ onLogged, onToast }) {
   }
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="mb-4">
-        <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
-          <span className="h-2 w-2 rounded-full bg-primary" />
-          Activity intake · real-time ledger write
-        </div>
-        <h1 className="font-headline text-[26px] font-bold tracking-tight text-on-surface md:text-[30px]">Log an activity</h1>
-        <p className="text-[13px] text-on-surface-variant">
-          Choose a category, enter the quantity, and the CO₂ engine applies the fixed factor instantly.
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-5">
+      <SectionHeading
+        className="animate-fade-up"
+        eyebrow={
+          <>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            Activity intake · real-time ledger write
+          </>
+        }
+        title="Log an activity"
+        subtitle="Choose a category, enter the quantity, and the CO₂ engine applies the fixed factor instantly — then it broadcasts to every open session."
+      />
 
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
         <Card className="p-5 xl:col-span-7">
@@ -163,7 +164,7 @@ export default function LogActivity({ onLogged, onToast }) {
             {status && (
               <div
                 className={`rounded-lg px-3 py-2 text-[12.5px] font-medium ${
-                  status.ok ? 'bg-emerald-soft text-[#065f46]' : 'bg-error-container text-on-error-container'
+                  status.ok ? 'bg-emerald-soft text-emerald' : 'bg-error-container text-on-error-container'
                 }`}
               >
                 {status.text}

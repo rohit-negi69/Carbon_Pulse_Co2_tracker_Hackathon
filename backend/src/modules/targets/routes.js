@@ -2,7 +2,8 @@ import { Router } from 'express';
 import * as targetRepository from '../../db/repositories/targetRepository.js';
 import * as historyRepository from '../../db/repositories/historyRepository.js';
 import * as nudges from '../nudges/service.js';
-import { broadcast } from '../realtime/hub.js';
+import { publish } from '../realtime/hub.js';
+import { buildSnapshot } from '../realtime/snapshot.js';
 
 const router = Router();
 
@@ -30,10 +31,11 @@ router.put('/target', async (req, res, next) => {
 
     const weeklyTarget = await targetRepository.set(value);
     await historyRepository.record('target-changed', 'singleton', { weeklyTarget });
-    broadcast('target', { weeklyTarget });
+    publish('target', { weeklyTarget });
+    publish('snapshot', await buildSnapshot());
 
     const evaluated = await nudges.evaluate();
-    evaluated.filter(Boolean).forEach((n) => broadcast('nudge', n));
+    evaluated.filter(Boolean).forEach((n) => publish('nudge', n));
 
     res.json({ weeklyTarget });
   } catch (err) {

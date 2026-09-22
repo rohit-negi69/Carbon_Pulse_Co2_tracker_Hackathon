@@ -3,12 +3,21 @@ import * as factorRepository from '../../db/repositories/factorRepository.js';
 import * as targetRepository from '../../db/repositories/targetRepository.js';
 import { currentWeekRange, weekProgress } from '../../domain/week.js';
 import { callOpenAI, llmEnabled } from './llm.js';
+import { forecastReport } from '../ml/forecast.js';
+import { recommendInterventions } from '../ml/recommend.js';
+import { detectAnomalies } from '../ml/anomaly.js';
 
 // ---------------------------------------------------------------------------
 // AI audit.
 // Deterministic analysis (works with no API key): hotspot attribution, week-end
 // projection, quantified swap suggestions and a prioritised next best action.
 // Optional LLM polish rewrites the narrative when a key is configured.
+//
+// The projection and the next best action are not heuristics any more — they
+// come from the ML layer: the week-end figure is the trained forecast blended
+// with actuals-to-date, and the recommendation is the top-ranked intervention
+// from the prescriptive model. The report therefore stays internally consistent
+// with the ML Lab page.
 // ---------------------------------------------------------------------------
 
 const SWAPS = {
@@ -67,20 +76,42 @@ export async function buildAudit() {
     });
   }
 
-  const rate = daysElapsed > 0 ? weekUsed / daysElapsed : 0;
-  const projection = Number((rate * 7).toFixed(2));
+  // ---- model-driven projection ------------------------------------------
+  // The forecast blends actuals-to-date with a per-day prediction for the
+  // remaining days, so a Monday glance and a Sunday glance are not extrapolated
+  // by the same naive run-rate.
+  const forecast = forecastReport(activities, { target: target.weeklyTarget });
+  const projection = forecast.currentWeek?.projectedTotal ?? (daysElapsed > 0 ? Number(((weekUsed / daysElapsed) * 7).toFixed(2)) : 0);
+  const interval = forecast.intervals || null;
+  const confident = forecast.confidence || 'low';
+
   if (target.weeklyTarget > 0) {
+    const over = projection > target.weeklyTarget;
     insights.push({
-      severity: projection > target.weeklyTarget ? 'high' : 'low',
+      severity: over ? 'high' : 'low',
       icon: 'target',
-      title:
-        projection > target.weeklyTarget
-          ? `On track to finish the week at ${projection} kg`
-          : `On track to finish under target (${projection} kg)`,
-      detail:
-        projection > target.weeklyTarget
-          ? `At today's pace you'd end ${(projection - target.weeklyTarget).toFixed(1)} kg over your ${target.weeklyTarget} kg target with ${daysRemaining} day(s) left. One swapped trip usually closes the gap.`
-          : `Your current pace lands ${(target.weeklyTarget - projection).toFixed(1)} kg under your ${target.weeklyTarget} kg target. Keep the habits that got you here.`,
+      title: over
+        ? `Forecast to finish the week at ${projection} kg`
+        : `Forecast to finish under target (${projection} kg)`,
+      detail: over
+        ? `The forecast model blends ${weekUsed} kg logged so far with predictions for the ${daysRemaining} remaining day(s)${
+            interval ? ` (±${interval.q80} kg at 80% confidence)` : ''
+          }, landing ${(projection - target.weeklyTarget).toFixed(1)} kg over your ${target.weeklyTarget} kg target. Forecast confidence: ${confident}.`
+        : `The model lands ${(target.weeklyTarget - projection).toFixed(1)} kg under your ${target.weeklyTarget} kg target${
+            interval ? ` (±${interval.q80} kg at 80% confidence)` : ''
+          }. Forecast confidence: ${confident}.`,
+    });
+  }
+
+  // ---- input integrity ---------------------------------------------------
+  const anomalies = detectAnomalies(activities);
+  if (anomalies.stats?.flagged > 0) {
+    const worst = anomalies.scored.filter((s) => s.isOutlier).sort((a, b) => b.score - a.score)[0];
+    insights.push({
+      severity: 'med',
+      icon: worst.type,
+      title: `${anomalies.stats.flagged} entr${anomalies.stats.flagged === 1 ? 'y' : 'ies'} look inconsistent with your ledger`,
+      detail: `Highest score: ${worst.quantity} of ${factors[worst.type]?.label || worst.type} on ${worst.date} — ${worst.reasons[0] || 'outside the learned normal range'}. Nothing was changed automatically; check History if that was a typo.`,
     });
   }
 
@@ -93,9 +124,21 @@ export async function buildAudit() {
     });
   }
 
+  // ---- prescriptive next best action -------------------------------------
+  const recommendations = recommendInterventions(activities, factors, {
+    weeklyTarget: target.weeklyTarget,
+    forecast,
+  });
+  const best = recommendations.bestNext;
+  const nextBestAction = best
+    ? `${best.label} — about ${best.savingPerWeekKg} kg CO₂/week (${best.savingPerMonthKg} kg/month), ${best.confidence} confidence.`
+    : ranked.length
+      ? SWAPS[ranked[0][0]]?.text || 'Log a few more activities to unlock a targeted suggestion.'
+      : 'Log your first activity to start the audit.';
+
   return {
     generatedAt: new Date().toISOString(),
-    engine: llmEnabled() ? 'hybrid (rules + LLM)' : 'rules',
+    engine: llmEnabled() ? 'hybrid (rules + ML + LLM)' : 'rules + ML',
     weekStart: start,
     weekEnd: end,
     weekUsed,
@@ -103,10 +146,19 @@ export async function buildAudit() {
     projection,
     daysRemaining,
     insights,
-    nextBestAction: ranked.length
-      ? SWAPS[ranked[0][0]]?.text || 'Log a few more activities to unlock a targeted suggestion.'
-      : 'Log your first activity to start the audit.',
+    nextBestAction,
     byCategory,
+    // Model provenance, so the UI can show where the numbers came from.
+    model: {
+      projectionMethod: 'ensemble forecast blended with actuals-to-date',
+      selectedModel: forecast.selectedModel || null,
+      confidence: forecast.confidence || 'low',
+      interval80: interval?.q80 ?? null,
+      backtestMae: forecast.accuracy?.mae ?? null,
+      backtestSmape: forecast.accuracy?.smape ?? null,
+      anomalyCount: anomalies.stats?.flagged ?? 0,
+      topRecommendation: best ? { id: best.id, savingPerWeekKg: best.savingPerWeekKg, confidence: best.confidence } : null,
+    },
   };
 }
 

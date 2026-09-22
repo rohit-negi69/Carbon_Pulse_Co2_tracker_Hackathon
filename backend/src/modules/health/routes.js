@@ -1,8 +1,11 @@
 import { Router } from 'express';
 import { dbMode, usingMongo } from '../../db/index.js';
-import { connectedClients } from '../realtime/hub.js';
+import { connectedClients, metrics, transportNames } from '../realtime/hub.js';
+import { WS_PATH } from '../realtime/ws.js';
+import { tickState } from '../realtime/ticks.js';
 import { llmEnabled } from '../copilot/llm.js';
 import { integrations } from '../../integrations/index.js';
+import { classifierState, describeModels } from '../ml/registry.js';
 
 const startedAt = Date.now();
 
@@ -25,7 +28,25 @@ const ROUTES = [
   ['GET', '/api/nudges · POST /api/nudges/read', 'Alerts & nudges feed'],
   ['POST', '/api/chat', 'Hybrid copilot chat (can log activities)'],
   ['GET', '/api/ai/audit', 'AI audit insights (+ ?llm=1 for LLM polish)'],
-  ['GET', '/api/stream', 'Server-Sent Events stream of live changes'],
+  ['POST', '/api/chat/stream', 'Streaming copilot reply (SSE, token by token)'],
+  ['GET', '/api/ml/report', 'Full ML report: forecast, anomalies, clusters, recommendations'],
+  ['GET', '/api/ml/models', 'Model catalogue + trained classifier state'],
+  ['GET', '/api/ml/forecast', '7-day forecast with backtest metrics and intervals'],
+  ['GET', '/api/ml/anomalies', 'Outlier-scored ledger + learned confirmation thresholds'],
+  ['GET', '/api/ml/clusters', 'Behavioural day archetypes (k-means, silhouette-selected k)'],
+  ['GET', '/api/ml/recommendations', 'Ranked interventions with quantified kg savings'],
+  ['POST', '/api/ml/classify', 'Classify free text into an activity category'],
+  ['POST', '/api/ml/train', 'Retrain the text classifier'],
+  ['POST', '/api/ml/feedback', 'Store a confirmed label (online learning)'],
+  ['POST', '/api/tracking/trips', 'Start a GPS tracking session'],
+  ['POST', '/api/tracking/trips/:id/points', 'Append GPS fixes and get a live classification'],
+  ['POST', '/api/tracking/classify', 'Classify a raw GPS trace without persisting it'],
+  ['POST', '/api/tracking/trips/:id/complete', 'Close a trip and write it to the ledger'],
+  ['WS', `${WS_PATH}`, 'Bidirectional WebSocket: events in, commands out (primary transport)'],
+  ['GET', '/api/realtime', 'Transport descriptor: socket commands + lifecycle'],
+  ['GET', '/api/stream', 'Server-Sent Events stream: hello, snapshot, activity, nudge, presence'],
+  ['GET', '/api/stream/state', 'Current metrics + presence + snapshot without subscribing'],
+  ['GET', '/api/telemetry', 'Live connection and event-rate telemetry'],
   ['POST', '/api/stream/broadcast', 'Manual broadcast hook'],
 ];
 
@@ -37,9 +58,22 @@ router.get('/health', (_req, res) => {
     db: dbMode(),
     dbPersistent: usingMongo(),
     llm: llmEnabled() ? 'on' : 'off (rule-based chat + audit active)',
-    realtime: 'sse',
+    realtime: {
+      primary: 'websocket',
+      fallbacks: ['server-sent-events', 'polling'],
+      transports: [...new Set(['websocket', ...transportNames()])],
+      socket: WS_PATH,
+      ticker: tickState(),
+    },
     clients: connectedClients(),
+    telemetry: metrics(),
     integrations: integrations.status(),
+    ml: {
+      models: describeModels().length,
+      classifier: classifierState().trained ? 'trained' : 'untrained',
+      classifierVersion: classifierState().version || null,
+      classifierAccuracy: classifierState().metrics?.accuracy ?? null,
+    },
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
   });
 });

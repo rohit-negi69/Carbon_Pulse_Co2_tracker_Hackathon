@@ -2,13 +2,16 @@ import * as activityRepository from '../../db/repositories/activityRepository.js
 import * as historyRepository from '../../db/repositories/historyRepository.js';
 import * as engine from '../calculation/service.js';
 import * as nudges from '../nudges/service.js';
-import { broadcast } from '../realtime/hub.js';
+import { publish } from '../realtime/hub.js';
+import { buildSnapshot } from '../realtime/snapshot.js';
 import { toDateStr } from '../../domain/week.js';
 import { integrations } from '../../integrations/index.js';
 
 // ---------------------------------------------------------------------------
 // Activity Management
-// Orchestrates: validate → calculate → persist → audit → nudge → broadcast.
+// Orchestrates: validate → calculate → persist → audit → nudge → publish.
+// Every write ends with a live snapshot broadcast, so subscribed browsers
+// re-render from pushed state rather than re-fetching.
 // ---------------------------------------------------------------------------
 
 export async function create({ type, quantity, date, notes, confirmed = false, source = 'form' }) {
@@ -29,13 +32,15 @@ export async function create({ type, quantity, date, notes, confirmed = false, s
   });
 
   await historyRepository.record('created', String(record._id), record);
-  broadcast('activity', { activity: record, co2: result.co2, label: result.factor.label, source });
 
-  // Evaluate target nudges after the write so alerts always reflect the ledger.
+  // 1) the entry itself (for tickers, highlight flashes and toasts)
+  publish('activity', { activity: record, co2: result.co2, label: result.factor.label, source, tier: result.tier });
+  // 2) recalculated aggregates (dashboard, header, targets update instantly)
+  publish('snapshot', await buildSnapshot());
+
   const newNudges = await nudges.evaluate();
-  newNudges.filter(Boolean).forEach((n) => broadcast('nudge', n));
+  newNudges.filter(Boolean).forEach((n) => publish('nudge', n));
 
-  // Optional external notification (no-op unless an email provider is configured).
   integrations.email.notifyActivity(record, result.factor).catch(() => {});
 
   return { ok: true, activity: record, co2: result.co2, factor: result.factor };
@@ -51,8 +56,11 @@ export async function remove(id) {
   if (!deleted) return { ok: false, status: 404, error: 'Activity not found' };
 
   await historyRepository.record('deleted', String(id), deleted);
-  broadcast('deleted', { id: String(id), activity: deleted });
-  await nudges.evaluate();
+  publish('deleted', { id: String(id), activity: deleted });
+  publish('snapshot', await buildSnapshot());
+  const newNudges = await nudges.evaluate();
+  newNudges.filter(Boolean).forEach((n) => publish('nudge', n));
+
   return { ok: true, activity: deleted };
 }
 

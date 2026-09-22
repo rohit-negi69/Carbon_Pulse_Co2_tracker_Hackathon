@@ -4,7 +4,26 @@ import {
   PieChart, Pie, Cell, BarChart, Bar,
 } from 'recharts';
 import { api } from '../../lib/api.js';
-import { Card, Icon, StatCard, CATEGORY_META, SegmentedBar, Skeleton } from '../../components/ui/index.jsx';
+import {
+  Card,
+  AuroraCard,
+  Icon,
+  StatCard,
+  CountUp,
+  CATEGORY_META,
+  SegmentedBar,
+  SectionHeading,
+  Skeleton,
+} from '../../components/ui/index.jsx';
+
+const TOOLTIP_STYLE = {
+  borderRadius: 12,
+  border: '1px solid rgb(var(--outline-variant))',
+  background: 'rgb(var(--surface-container-lowest))',
+  color: 'rgb(var(--on-surface))',
+  fontSize: 12,
+  boxShadow: '0 18px 40px -18px rgb(0 0 0 / 0.35)',
+};
 
 const RANGES = [
   { key: '14', label: '14 days' },
@@ -76,41 +95,46 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
   const worstWeekday = [...data.weekdayTotals].sort((a, b) => b.kg - a.kg)[0];
 
   return (
-    <div className="flex w-full flex-col">
-      <div className="mb-4 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-        <div>
-          <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant">
-            <span className="h-2 w-2 rounded-full bg-primary" />
+    <div className="flex w-full flex-col gap-5">
+      <SectionHeading
+        className="animate-fade-up"
+        eyebrow={
+          <>
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             Charts &amp; insights · aggregated from the live ledger
             <span className="text-outline">•</span>
-            <span className="text-secondary">{live?.status === 'live' ? 'streaming' : 'sync mode'}</span>
+            <span className="text-primary">{live?.status === 'live' ? 'streaming' : 'sync mode'}</span>
+          </>
+        }
+        title="Carbon analytics & reduction modelling"
+        subtitle="Trends, weekday rhythms, scope accounting and a what-if modeller so the numbers turn into a decision — not a scorecard."
+        actions={
+          <div className="flex items-center gap-1 rounded-xl border border-outline-variant/40 bg-surface-container-lowest p-1">
+            {RANGES.map((r) => (
+              <button
+                key={r.key}
+                onClick={() => setRange(r.key)}
+                className={`rounded-lg px-3 py-1.5 text-[11.5px] font-medium transition-all ${
+                  range === r.key ? 'bg-primary font-semibold text-on-primary shadow-glow-sm' : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
           </div>
-          <h1 className="font-headline text-[26px] font-bold tracking-tight text-on-surface md:text-[30px]">
-            Carbon analytics &amp; reduction modelling
-          </h1>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {RANGES.map((r) => (
-            <button
-              key={r.key}
-              onClick={() => setRange(r.key)}
-              className={`rounded px-2.5 py-1 text-[11.5px] font-medium transition-all ${
-                range === r.key ? 'bg-primary font-semibold text-on-primary' : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+        }
+      />
 
       {/* Ribbon */}
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="This week"
           icon="calendar"
-          value={data.thisWeekTotal.toFixed(1)}
+          value={data.thisWeekTotal}
+          decimals={1}
           unit="kg CO₂"
+          accent="rgb(var(--primary))"
+          delay={0}
           footer={
             <>
               <Icon name={data.deltaPct > 0 ? 'trend' : 'pulse'} size={13} className={deltaTone} />
@@ -120,12 +144,12 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
             </>
           }
         />
-        <StatCard label="Last week" icon="history" value={data.lastWeekTotal.toFixed(1)} unit="kg CO₂" footer={
+        <StatCard label="Last week" icon="history" value={data.lastWeekTotal} decimals={1} unit="kg CO₂" accent="#0284c7" delay={60} footer={
           <>
             <Icon name="verified" size={13} className="text-primary" /> previous Mon–Sun window
           </>
         } />
-        <StatCard label="Week-end projection" icon="target" value={data.projection.toFixed(1)} unit="kg CO₂" footer={
+        <StatCard label="Week-end projection" icon="target" value={data.projection} decimals={1} unit="kg CO₂" accent="rgb(var(--tertiary))" delay={120} footer={
           <>
             <Icon name="pulse" size={13} className={projectionTone} />
             <span className={projectionTone}>
@@ -133,7 +157,7 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
             </span>
           </>
         } />
-        <StatCard label="Peak weekday" icon="scale" value={worstWeekday?.name || '—'} unit={`${(worstWeekday?.kg || 0).toFixed(1)} kg avg`} footer={
+        <StatCard label="Peak weekday" icon="scale" value={worstWeekday?.name || '—'} unit={`${(worstWeekday?.kg || 0).toFixed(1)} kg avg`} accent="rgb(var(--amber))" delay={180} footer={
           <>
             <Icon name="alert" size={13} className="text-amber" /> highest-output day of the week
           </>
@@ -153,18 +177,18 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
                 <AreaChart data={trend} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
                   <defs>
                     <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#006948" stopOpacity={0.28} />
-                      <stop offset="100%" stopColor="#006948" stopOpacity={0.02} />
+                      <stop offset="0%" stopColor="rgb(var(--primary))" stopOpacity={0.32} />
+                      <stop offset="100%" stopColor="rgb(var(--primary))" stopOpacity={0.02} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid stroke="#eaedff" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#6d7a72' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#6d7a72' }} axisLine={false} tickLine={false} />
+                  <CartesianGrid stroke="rgb(var(--outline-variant))" strokeOpacity={0.5} vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'rgb(var(--outline))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'rgb(var(--outline))' }} axisLine={false} tickLine={false} />
                   <Tooltip
                     formatter={(v) => [`${Number(v).toFixed(2)} kg CO₂`, 'Footprint']}
-                    contentStyle={{ borderRadius: 8, border: '1px solid #bccac0', fontSize: 12 }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
-                  <Area type="monotone" dataKey="kg" stroke="#006948" strokeWidth={2} fill="url(#trendFill)" />
+                  <Area type="monotone" dataKey="kg" stroke="rgb(var(--primary))" strokeWidth={2} fill="url(#trendFill)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -181,14 +205,14 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.weekdayTotals} margin={{ top: 6, right: 8, left: -14, bottom: 0 }}>
-                  <CartesianGrid stroke="#eaedff" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6d7a72' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#6d7a72' }} axisLine={false} tickLine={false} />
+                  <CartesianGrid stroke="rgb(var(--outline-variant))" strokeOpacity={0.5} vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'rgb(var(--outline))' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: 'rgb(var(--outline))' }} axisLine={false} tickLine={false} />
                   <Tooltip
                     formatter={(v, n, p) => [`${Number(v).toFixed(2)} kg · ${p.payload.count} entr${p.payload.count === 1 ? 'y' : 'ies'}`, 'Total']}
-                    contentStyle={{ borderRadius: 8, border: '1px solid #bccac0', fontSize: 12 }}
+                    contentStyle={TOOLTIP_STYLE}
                   />
-                  <Bar dataKey="kg" fill="#00855d" radius={[6, 6, 0, 0]} maxBarSize={44} />
+                  <Bar dataKey="kg" fill="rgb(var(--primary-container))" radius={[6, 6, 2, 2]} maxBarSize={44} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -240,7 +264,7 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
                 </div>
                 <div className={`rounded-lg p-3 ${simulation.saving > 0 ? 'bg-emerald-soft' : 'bg-amber-soft'}`}>
                   <div className="muted-label">Saving</div>
-                  <div className={`tabular text-[16px] font-bold ${simulation.saving > 0 ? 'text-[#065f46]' : 'text-[#92400e]'}`}>
+                  <div className={`tabular text-[16px] font-bold ${simulation.saving > 0 ? 'text-emerald' : 'text-amber'}`}>
                     {simulation.saving} kg ({simulation.savingPct}%)
                   </div>
                 </div>
@@ -270,7 +294,7 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
                       <Pie data={segments} dataKey="value" nameKey="label" innerRadius={44} outerRadius={68} paddingAngle={2} stroke="none">
                         {segments.map((s) => <Cell key={s.key} fill={s.color} />)}
                       </Pie>
-                      <Tooltip formatter={(v, n) => [`${Number(v).toFixed(2)} kg`, n]} contentStyle={{ borderRadius: 8, border: '1px solid #bccac0', fontSize: 12 }} />
+                      <Tooltip formatter={(v, n) => [`${Number(v).toFixed(2)} kg`, n]} contentStyle={TOOLTIP_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -319,7 +343,7 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
                   </div>
                   <div className="text-right">
                     <div className="tabular text-[12.5px] font-semibold text-on-surface">{s.total} kg</div>
-                    <span className={`pill ${s.exceeded ? 'bg-rose-soft text-[#9f1239]' : 'bg-emerald-soft text-[#065f46]'}`}>
+                    <span className={`pill ${s.exceeded ? 'bg-rose-soft text-rose' : 'bg-emerald-soft text-emerald'}`}>
                       {s.exceeded ? 'Over' : 'Under'} {s.target}
                     </span>
                   </div>
@@ -329,7 +353,7 @@ export default function InsightsPage({ refreshKey, live, onToast }) {
           </Card>
 
           {audit?.nextBestAction && (
-            <div className="rounded-xl border border-primary/20 bg-emerald-soft p-4 text-[12.5px] font-medium text-[#065f46]">
+            <div className="rounded-xl border border-primary/20 bg-emerald-soft p-4 text-[12.5px] font-medium text-emerald">
               Next best action: {audit.nextBestAction}
             </div>
           )}

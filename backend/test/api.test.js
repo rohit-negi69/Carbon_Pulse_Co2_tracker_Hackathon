@@ -32,7 +32,9 @@ test('health reports dependencies', async () => {
   assert.equal(status, 200);
   assert.equal(body.ok, true);
   assert.ok(['mongo', 'memory'].includes(body.db));
-  assert.equal(body.realtime, 'sse');
+  assert.equal(body.realtime.primary, 'websocket');
+  assert.ok(body.realtime.fallbacks.includes('server-sent-events'));
+  assert.equal(body.realtime.socket, '/api/ws');
 });
 
 test('CO₂ calculation engine applies the fixed factors', async () => {

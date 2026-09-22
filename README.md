@@ -21,13 +21,35 @@ Turn daily choices — car trips, flights, meals, electricity — into a visible
 ### Beyond the brief
 6. **Charts & Insights** — 14-day trend area chart, category donut, weekday profile, GHG-protocol **scope split** (1/2/3), week-over-week delta, persisted **weekly rollups**, and a **reduction modeler** that quantifies a swap before you commit to it.
 7. **Alerts & Nudges centre** — server-evaluated nudge feed (budget warnings, pace coaching, over-budget guidance) with an unread badge in the header. Deduplicated per week so it informs without nagging.
-8. **Real-time sync (SSE)** — `GET /api/stream` pushes every new entry, deletion, target change, and nudge to all open sessions. The header shows a live session count and the dashboard flashes an update banner. Falls back to polling automatically.
+8. **Fully real-time (bidirectional WebSocket)** — `ws://…/api/ws` is the primary channel: the server pushes every new entry, deletion, target change and nudge, **and the same socket carries commands back** (`activity.log`, `activity.delete`, `target.set`, `chat.ask`, `simulate`, `insights.get`, `presence.typing`, …), each answering with an ack. Frames are sequence-numbered and buffered, so a dropped connection replays exactly what it missed. An always-on ticker pushes telemetry (events/min, sessions, transport mix) and live **grid carbon intensity**. Degrades WebSocket → SSE → polling automatically, and queues commands issued mid-reconnect. See the **Live Ops** tab.
 9. **Audit trail** — every create, delete and target change is appended to `activity_history`, and the ledger exports as CSV/JSON from the server (`/api/export`).
 10. **AI Eco-Audit Copilot** — a hybrid AI layer:
    - **Chat that reads your live ledger:** *"what's my footprint?"*, *"which category is worst?"*, *"how is my weekly progress?"*
    - **Logs activities from natural language:** *"I drove 15 km"* → entry created, dashboard and audit refreshed instantly.
    - **Diagnostic audit:** hotspot attribution, week-end projection at current pace, dietary/transit swap suggestions, and a prioritised "next best action".
    - **Hybrid by design:** the rule-based engine always works with **zero API keys**; setting `OPENAI_API_KEY` upgrades the same endpoints to LLM-written replies.
+
+## 🎨 Interface
+
+The UI is built to be demo-grade on a projector and readable on a phone:
+
+- **One token set, two themes.** Every colour is a CSS variable, so toggling `class="dark"` on `<html>` re-themes the entire app — charts included — with no component branching. The app opens in its signature light theme; the header has a one-tap switch that persists.
+- **Motion without a runtime.** ~12 Tailwind keyframes plus a `requestAnimationFrame` counter drive staggered entrances, self-drawing sparklines, pulsing live indicators, drifting ambient orbs and the gradient hero headline. **No animation dependency**, and `prefers-reduced-motion` collapses all of it.
+- **Command palette** — `⌘K` / `Ctrl+K` opens grouped, subsequence-matched navigation, actions and copilot prompts with full keyboard control.
+- **Award-oriented detail** — radial target gauge with a dashed overflow ring when the budget is crossed, gradient-bordered buttons with glow, shimmer skeletons, animated counters, illustrated empty states, and a fixed mobile dock for thumb navigation.
+- **A landing page, not a splash screen.** `/` opens on a hero that streams the live grid intensity and event feed into an illustrated product mock, then walks through a ticker marquee, a bento of the six capabilities with real photography, a how-it-works ladder, the live band, the emission-factor grid and a closing CTA — plus a sticky "enter the dashboard" bar on phones.
+- **Photos that fail safe.** `Photo` reserves the space with an aspect ratio, paints a token-driven gradient and pixel grid behind the frame, fades the file in on load and swallows the error event — so a blocked CDN, an offline grader or the preview file still sees a designed panel instead of a broken image.
+
+See **[docs/ui-system.md](docs/ui-system.md)** for the token table, keyframe inventory, component API and the light/dark/mobile audit.
+
+### Offline preview file
+
+The whole UI — landing page, dashboard, every feature — also ships as **one self-contained HTML file**: no backend, no network. `frontend/build-preview.mjs` inlines the production JS, CSS and photos (as base64 data URIs) beside a mocked REST API and a mocked WebSocket, so it opens straight off the filesystem:
+
+```bash
+cd frontend
+npm run build && node build-preview.mjs     # → frontend/preview.html (single file, zero requests)
+```
 
 ## 🧱 Architecture
 
@@ -49,7 +71,7 @@ backend/src/                       frontend/src/
 │   ├── targets/                  ├── components/  layout · ui
 │   ├── nudges/                   └── lib/         api · useLive
 │   ├── copilot/   rules + LLM
-│   ├── realtime/  SSE hub
+│   ├── realtime/  ws · hub · commands · ticks
 │   └── health/
 ├── integrations/  email · carbon · geo
 ├── middleware/    validate · rate limit · errors
@@ -58,10 +80,10 @@ backend/src/                       frontend/src/
 
 | Layer | Tech |
 |---|---|
-| Frontend | React 18 + Vite, Tailwind CSS (CarbonPulse design system), Recharts |
+| Frontend | React 18 + Vite, Tailwind CSS (CSS-variable token system with full dark mode), Recharts, hand-rolled SVG charts |
 | Backend | Node.js + Express |
 | Database | MongoDB via Mongoose, with an automatic in-memory fallback so the app never hard-fails |
-| Real-time | Server-Sent Events (`/api/stream`) |
+| Real-time | Native WebSocket (`/api/ws`, hand-rolled RFC 6455 — no extra dependency) with SSE + polling fallbacks, a sequenced replay buffer and a telemetry ticker |
 | AI | Rule-based intent engine + deterministic audit, optional OpenAI upgrade |
 
 ## 🚀 Run locally
@@ -70,7 +92,7 @@ Prerequisites: Node 18+.
 
 ```bash
 # 0) Tests (optional but recommended)
-cd backend && npm install && npm test    # 15 API tests, node:test — no extra deps
+cd backend && npm install && npm test    # 65 tests (API, SSE replay, WebSocket commands, GPS trip tracking, ML), node:test — no extra deps
 
 # 1) Backend  (terminal 1)
 cd backend
@@ -142,10 +164,25 @@ CLIENT_ORIGIN=http://localhost:5173
 | GET / PUT | `/api/target` | Read / set the weekly target |
 | GET | `/api/ai/audit` | AI audit insights + projection (`?llm=1` to request LLM polish) |
 | POST | `/api/chat` | Hybrid copilot (`message`, `history?`) — can log activities |
-| GET | `/api/stream` | **Real-time SSE** stream of `activity`, `deleted`, `target` events |
+| WS | `/api/ws` | **Primary real-time channel.** Server pushes `hello`, `snapshot`, `activity`, `deleted`, `target`, `nudge`, `presence`, `typing`, `telemetry`, `grid`; client sends `{ id, cmd, payload }` and receives `{ kind: 'ack' }` / `{ kind: 'stream' }` |
+| GET | `/api/realtime` | Transport descriptor: socket commands, events, replay/heartbeat lifecycle |
+| GET | `/api/stream` | Server-Sent Events fallback (same frames, same sequence ids) |
+| GET | `/api/stream/state` | Metrics + presence + snapshot in one request (polling fallback) |
+| GET | `/api/telemetry` | Connection, event-rate and ticker metrics |
 | GET | `/api/health` | `{ ok, db, llm, realtime, clients }` |
 
-**Standard API for track:** ❌ Not implemented — CarbonPulse exposes its own documented REST API plus an SSE stream, and is designed to be graded by a browser agent driving the UI.
+### Socket commands (`/api/ws`)
+
+```jsonc
+// client → server
+{ "id": "c1", "cmd": "activity.log", "payload": { "type": "car", "quantity": 12 } }
+// server → client  (streaming replies emit { kind: "stream" } frames first)
+{ "kind": "ack", "id": "c1", "ok": true, "data": { "activity": {…}, "co2": 2.4 } }
+```
+
+`ping` · `stats.get` · `activity.log` · `activity.delete` · `activity.list` · `target.set` · `chat.ask` · `insights.get` · `simulate` · `audit.get` · `nudges.get` · `presence.typing` · `session.describe`
+
+**Standard API for track:** ❌ Not implemented for the Climate Tech track — CarbonPulse exposes its own documented REST API **plus a documented bidirectional WebSocket API**, and is designed to be graded by either a browser agent driving the UI or a script driving the socket/REST endpoints directly.
 
 ## 🎥 Demo
 
@@ -157,11 +194,16 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the annotated tree. In short: the bac
 
 ```
 backend/src/modules/   activities · calculation · analytics · targets · nudges · copilot · realtime · health
-frontend/src/features/  dashboard · activities · insights · targets · history · nudges · copilot
+frontend/src/features/  dashboard · activities · insights · targets · history · nudges · copilot · realtime
+
+Real-time runbook: open the app in two tabs and watch the `Live Ops` tab — sessions, latency, sequence ids and the
+command console are all live. `curl -N http://localhost:3001/api/stream` prints the same frames as raw SSE, and
+`curl http://localhost:3001/api/realtime` lists the socket protocol.
 ```
 
 | Root file | Purpose |
 |---|---|
 | `ARCHITECTURE.md` | Layered architecture, calculation flow, module map |
 | `DECISIONS.md` | DP1 · nudge, DP2 · absurd input, DP3 · the week |
-| `docs/design-system.md` | CarbonPulse design tokens and component rules |
+| `docs/ui-system.md` | Implemented UI system — tokens, dark mode, motion, primitives |
+| `docs/design-system.md` | Original CarbonPulse brand sheet (tokens and component rules) |

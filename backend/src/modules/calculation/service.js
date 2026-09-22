@@ -54,3 +54,35 @@ export async function calculate({ type, quantity, confirmed = false }) {
 export function tierFor(co2) {
   return tierOf(co2);
 }
+
+/**
+ * What-if simulator: swap `quantity` units of one category for another.
+ * Shared by POST /api/simulate and the socket's `simulate` command.
+ */
+export async function simulate({ fromType, toType, quantity } = {}) {
+  const qty = Number(quantity);
+  if (!Number.isFinite(qty) || qty <= 0) {
+    return { ok: false, status: 400, error: 'quantity must be a positive number' };
+  }
+
+  const factors = await factorRepository.all();
+  if (!factors[fromType] || !factors[toType]) {
+    return { ok: false, status: 400, error: 'fromType and toType must be valid activity types' };
+  }
+
+  const before = Number((qty * factors[fromType].factor).toFixed(2));
+  const after = Number((qty * factors[toType].factor).toFixed(2));
+  const saving = Number((before - after).toFixed(2));
+
+  return {
+    ok: true,
+    fromType,
+    toType,
+    quantity: qty,
+    before,
+    after,
+    saving,
+    savingPct: before > 0 ? Math.round((saving / before) * 100) : 0,
+    monthlySaving: Number((saving * 4).toFixed(2)),
+  };
+}
