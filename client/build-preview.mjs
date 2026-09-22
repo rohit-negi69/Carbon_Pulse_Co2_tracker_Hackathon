@@ -133,6 +133,49 @@ const mockApi = `<script>
     if (base === '/api/target' && (!opts.method || opts.method === 'GET')) return json({ weeklyTarget: target });
     if (base === '/api/target' && opts.method === 'PUT') { target = body.weeklyTarget; return json({ weeklyTarget: target }); }
     if (base === '/api/ai/audit') return json(auditData());
+    if (base === '/api/simulate' && opts.method === 'POST') {
+      const before = +(body.quantity * FACTORS[body.fromType].factor).toFixed(2);
+      const after = +(body.quantity * FACTORS[body.toType].factor).toFixed(2);
+      const saving = +(before - after).toFixed(2);
+      return json({ fromType: body.fromType, toType: body.toType, quantity: body.quantity, before, after, saving,
+        savingPct: before > 0 ? Math.round((saving / before) * 100) : 0, monthlySaving: +(saving * 4).toFixed(2) });
+    }
+    if (base === '/api/nudges') {
+      const w = weekMeta();
+      const items = [];
+      if (w.exceeded) items.push({ _id: 'n1', kind: 'exceeded', severity: 'high', read: false,
+        title: 'Weekly target exceeded — ' + w.used + ' kg of ' + target + ' kg',
+        body: 'Awareness is the win. Pick one category to trim rather than fixing everything at once.', createdAt: new Date().toISOString() });
+      else if (w.pct >= 80) items.push({ _id: 'n1', kind: 'warn', severity: 'med', read: false,
+        title: w.pct + '% of your weekly budget used', body: 'You have ' + (target - w.used).toFixed(1) + ' kg left for the rest of the week.', createdAt: new Date().toISOString() });
+      items.push({ _id: 'n2', kind: 'insight', severity: 'low', read: true,
+        title: 'Pace check: ' + w.pace.replace('-', ' '), body: w.pct + '% of budget used with ' + w.elapsedPct + '% of the week elapsed.', createdAt: new Date().toISOString() });
+      return json({ notifications: items, unread: items.filter((i) => !i.read).length });
+    }
+    if (base === '/api/nudges/read') return json({ notifications: [], unread: 0 });
+    if (base === '/api/insights') {
+      const cats = byCat(acts);
+      const total = +acts.reduce((n, a) => n + a.co2, 0).toFixed(2);
+      const mix = Object.entries(cats).filter(([, kg]) => kg > 0).map(([type, kg]) => ({ type, label: FACTORS[type].label, kg, share: Math.round((kg / total) * 100) })).sort((a, b) => b.kg - a.kg);
+      const trend = [];
+      for (let i = 13; i >= 0; i--) { const day = d(i); trend.push({ date: day, label: day.slice(5), kg: +acts.filter((a) => a.date === day).reduce((n, a) => n + a.co2, 0).toFixed(2), isCurrentWeek: i < 7 }); }
+      const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const weekdayTotals = names.map((name, idx) => {
+        const rows = acts.filter((a) => (new Date(a.date + 'T00:00:00').getDay() + 6) % 7 === idx);
+        return { name, kg: +rows.reduce((n, a) => n + a.co2, 0).toFixed(2), count: rows.length };
+      });
+      return json({ weekStart: weekMeta().start, weekEnd: weekMeta().end, thisWeekTotal: weekMeta().used,
+        lastWeekTotal: 41.2, deltaPct: 12, projection: +(weekMeta().used / 2 * 7).toFixed(2), target,
+        trend, weekdayTotals, mix,
+        scopeBreakdown: { 'scope-1': cats.car || 0, 'scope-2': cats.electricity || 0, 'scope-3': +((cats.flight || 0) + (cats.bus || 0) + (cats.veg_meal || 0) + (cats.non_veg_meal || 0)).toFixed(2) },
+        summaries: [{ period: '2026-W38', total: 41.2, target, exceeded: false, activityCount: 9 }, { period: '2026-W39', total: weekMeta().used, target, exceeded: weekMeta().exceeded, activityCount: acts.length }] });
+    }
+    if (base === '/api/services') return json({ services: [
+      { key: 'email', label: 'Email notifications (Resend)', enabled: false, note: 'Set RESEND_API_KEY + NOTIFY_EMAIL to enable digests' },
+      { key: 'carbonData', label: 'Carbon data API', enabled: false, note: 'Optional — fixed brief factors are used' },
+      { key: 'geo', label: 'Geo / distance API', enabled: false, note: 'Optional' },
+      { key: 'ai', label: 'LLM copilot (OpenAI)', enabled: false, note: 'Optional — rule-based copilot always available' }] });
+    if (base === '/api/docs') return json({ name: 'CarbonPulse API', version: '2.0.0', routes: [] });
     if (base === '/api/chat' && opts.method === 'POST') {
       const t = body.message.toLowerCase();
       const m = t.match(/(?:drove|flew|flight|bus)\\s*(\\d+(?:\\.\\d+)?)|(\\d+(?:\\.\\d+)?)\\s*km/);

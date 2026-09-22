@@ -1,12 +1,13 @@
 {
-  "name": "carbon-tracker-server",
-  "version": "1.0.0",
+  "name": "carbonpulse-server",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "node --watch index.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
