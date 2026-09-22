@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { haversineKm, cleanFixes, measure, classifyMode } from '../src/modules/tracking/service.js';
+import { createApp } from '../src/app.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures: synthetic GPS traces with known ground truth.
@@ -241,3 +242,71 @@ test('tracking: long-distance high-speed traces read as flight', () => {
   assert.equal(c.mode, 'flight', `got ${c.mode} at ${m.avgSpeedKmh} km/h`);
   assert.equal(c.activityType, 'flight');
 });
+
+// ---------------------------------------------------------------------------
+// HTTP surface — the unit tests above never touched the route layer, which is
+// where the live read is assembled for the tracker UI.
+// ---------------------------------------------------------------------------
+
+process.env.NODE_ENV = 'test';
+const app = createApp();
+const server = app.listen(0);
+const { port } = server.address();
+const base = `http://127.0.0.1:${port}/api`;
+
+test.after(() => {
+  server.closeAllConnections?.();
+  server.close();
+});
+
+const send = (path, body, method = 'POST') =>
+  fetch(base + path, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) });
+
+test('tracking api: the live read carries the cleaning counts the UI narrates', async () => {
+  const startRes = await send('/tracking/trips', { label: 'api car' });
+  assert.equal(startRes.status, 201);
+  const { trip } = await startRes.json();
+  const id = trip._id ?? trip.id;
+  assert.ok(id, 'starting a session returns an id');
+
+  const points = trace(6, 12); // 6 km in 12 min ≈ 30 km/h
+  points.splice(20, 0, { ...points[19], accuracy: 120 }); // worse than the 50 m bar
+
+  const res = await send(`/tracking/trips/${id}/points`, { points });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.ok(body.dropped, 'the live read must report what cleaning discarded (the UI renders it)');
+  assert.equal(body.dropped.accuracy, 1);
+  assert.equal(body.dropped.teleport, 0);
+  assert.ok(body.measurement.movingKm > 5.5 && body.measurement.movingKm < 6.5, `measured ${body.measurement.movingKm} km`);
+  assert.equal(body.classification.mode, 'car');
+
+  const done = await (await send(`/tracking/trips/${id}/complete`, { log: true })).json();
+  assert.ok(done.activity, 'a measured trip is written to the ledger');
+  assert.equal(done.activity.type, 'car');
+  assert.match(done.activity.notes, /^GPS trip/);
+  assert.ok(Math.abs(done.activity.co2 - done.trip.distanceKm * 0.2) < 0.05);
+});
+
+test('tracking api: a zero-emission trace is reported but never billed', async () => {
+  const { trip } = await (await send('/tracking/trips', { label: 'api walk' })).json();
+  const id = trip._id ?? trip.id;
+
+  await send(`/tracking/trips/${id}/points`, { points: trace(1.1, 14, 10, { jitterM: 3 }) });
+  const done = await (await send(`/tracking/trips/${id}/complete`, { log: true })).json();
+
+  assert.equal(done.classification.mode, 'walking');
+  assert.equal(done.activity, null, 'walking costs nothing and writes no ledger row');
+});
+
+test('tracking api: a closed session refuses further points', async () => {
+  const { trip } = await (await send('/tracking/trips', { label: 'api closed' })).json();
+  const id = trip._id ?? trip.id;
+
+  await send(`/tracking/trips/${id}/points`, { points: trace(3, 8) });
+  await send(`/tracking/trips/${id}/complete`, { log: false });
+
+  const late = await send(`/tracking/trips/${id}/points`, { points: trace(1, 3) });
+  assert.equal(late.status, 409, 'a completed trip is immutable');
+});
+

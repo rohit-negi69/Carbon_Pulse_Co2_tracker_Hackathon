@@ -305,7 +305,7 @@ export async function appendPoints(id, points = []) {
   if (trip.status !== 'active') return { ok: false, status: 409, error: `Trip is ${trip.status}` };
 
   const merged = [...(trip.points || []), ...points];
-  const { kept } = cleanFixes(merged);
+  const { kept, dropped } = cleanFixes(merged);
   const measurement = measure(kept);
   const classification = classifyMode(measurement);
 
@@ -336,7 +336,10 @@ export async function appendPoints(id, points = []) {
     },
   }, { replay: false });
 
-  return { ok: true, trip: updated, measurement, classification };
+  // The tracker UI narrates the cleaning pass ("kept N fixes, dropped X for poor
+  // accuracy, Y as impossible jumps"), so the counts have to travel back with
+  // the live read rather than being recomputed on the client.
+  return { ok: true, trip: updated, measurement, classification, dropped };
 }
 
 /** Record a user correction — this becomes ground truth for the model. */
