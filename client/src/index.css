@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    @apply bg-surface font-body text-on-surface antialiased;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-headline;
+  }
+  /* Tabular numerals everywhere telemetry is shown, so live values never reflow */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+  }
+  ::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d2d9f4;
+    border-radius: 9999px;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface-container-lowest rounded-xl border border-outline-variant/40 shadow-card;
+  }
+  .muted-label {
+    @apply font-body text-[11px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-all;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-on-primary hover:bg-primary-container focus:outline-none focus:ring-2 focus:ring-primary-fixed-dim;
+  }
+  .btn-secondary {
+    @apply btn border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-low;
+  }
+  .btn-ghost {
+    @apply btn text-primary hover:bg-surface-container-low;
+  }
+  .input {
+    @apply w-full rounded-lg border border-outline-variant bg-surface-container-low px-3 py-2 text-[13px] text-on-surface outline-none transition-all placeholder:text-outline focus:border-primary focus:bg-surface-container-lowest;
+  }
+  .field-label {
+    @apply mb-1 block text-[11px] font-semibold uppercase tracking-[0.06em] text-on-surface-variant;
+  }
+}

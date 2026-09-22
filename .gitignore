@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.production
+*.log
+.DS_Store
+server/data/
+.vercel
+client/preview.html
+.freebuff/
