@@ -19,6 +19,30 @@
 // so the model sharpens against this deployment's real traffic.
 // ---------------------------------------------------------------------------
 
+// Category anchors: terms that name the *thing being logged* rather than the
+// verb around it. A verb alone is not evidence — "ran" appears in "ran the
+// dishwasher" (electricity) but equally in "the meeting ran long" (nothing at
+// all). Scoring these terms with extra weight is what separates the car↔bus
+// and flight↔car boundaries, where the verbs are identical and only the noun
+// differs.
+export const ANCHORS = {
+  car: ['car', 'cars', 'drove', 'driving', 'drive', 'taxi', 'uber', 'cab', 'van', 'suv', 'truck',
+    'rideshare', 'carpooled', 'hatchback', 'minivan', 'volvo', 'petrol', 'wheel', 'commute'],
+  bus: ['bus', 'buses', 'bussed', 'metro', 'tube', 'subway', 'tram', 'train', 'rail', 'coach',
+    'ferry', 'shuttle', 'underground', 'transport'],
+  flight: ['flight', 'flights', 'flew', 'flying', 'fly', 'plane', 'planes', 'jet', 'aircraft', 'airline',
+    'seaplane', 'pilot', 'piloted', 'layover'],
+  electricity: ['kwh', 'electricity', 'electric', 'electrical', 'dishwasher', 'washing_machine', 'washing',
+    'machine', 'boiler', 'heater', 'heating', 'fridge', 'freezer', 'oven', 'kettle', 'dryer', 'vacuum',
+    'iron', 'charged', 'charging', 'charger', 'thermostat', 'meter', 'solar', 'appliance', 'aircon', 'ac'],
+  veg_meal: ['veg', 'veggie', 'vegetarian', 'vegan', 'tofu', 'salad', 'lentil', 'dal', 'falafel', 'paneer',
+    'mushroom', 'chickpea', 'quinoa', 'hummus', 'tempeh', 'halloumi', 'jackfruit', 'plant_based', 'meat_free',
+    'oatmeal', 'vegetable', 'vegetables'],
+  non_veg_meal: ['chicken', 'beef', 'steak', 'pork', 'lamb', 'mutton', 'fish', 'salmon', 'tuna', 'prawn',
+    'prawns', 'bacon', 'turkey', 'sausage', 'ham', 'duck', 'venison', 'kebab', 'shawarma', 'pepperoni',
+    'biryani', 'mcdonalds', 'meat', 'kofta', 'rendang'],
+};
+
 export const CORPUS = {
   car: [
     'drove to work', 'drove 15 km', 'i drove my car', 'drove to campus and back',
@@ -105,6 +129,9 @@ export const CORPUS = {
     'hummus and pita', 'veggie spring rolls', 'jackfruit curry',
     'oat milk latte and a vegan muffin', 'vegetarian pasta bake',
     'cooked a veg stir fry', 'stuffed peppers for dinner',
+    // Cheese is vegetarian, so it must not be evidence for a meat meal just
+    // because the only training phrase containing it also contained ham.
+    'cheese and tomato sandwich', 'macaroni cheese for dinner', 'cheese omelette breakfast',
   ],
   non_veg_meal: [
     'ate a non veg meal', 'had chicken for lunch', 'ate 2 non-veg meals',
@@ -134,6 +161,16 @@ export const CORPUS = {
     'i need to buy groceries', 'my phone battery is low', 'call me later',
     'what is the meaning of scope 3', 'who built this app',
     'show me a chart', 'can you predict next month',
+    'set my target to 45 kg', 'update my weekly target', 'change my target please',
+
+    // Confusable negatives. Every class above shares ordinary verbs ("ran",
+    // "took", "went", "had"); without these the model learns "ran" ⇒
+    // electricity and files a budget meeting as an appliance. These phrases
+    // carry the shared verbs with no category anchor at all.
+    'the meeting ran long', 'i ran out of milk', 'we ran late this morning',
+    'the tap ran all night', 'the shower ran cold', 'the budget ran over',
+    'my nose ran all day', 'the film ran for three hours',
+    'i took notes during the call', 'we went over the plan', 'i took a break',
   ],
 };
 

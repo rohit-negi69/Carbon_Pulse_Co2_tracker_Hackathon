@@ -1,7 +1,7 @@
 # 🌱 CarbonPulse — Real-Time Carbon Footprint Tracker
 
 **Track:** Climate Tech
-**Hackathon ID:** `PASTE_YOUR_HACKATHON_ID_HERE` ⚠️ *replace this with your real ID before submitting — a missing or mismatched ID disqualifies the entry.*
+**Hackathon ID:** AZIS-74KWR4
 
 Turn daily choices — car trips, flights, meals, electricity — into a visible carbon footprint, in real time, with an AI copilot that tells you what actually moves the number.
 
