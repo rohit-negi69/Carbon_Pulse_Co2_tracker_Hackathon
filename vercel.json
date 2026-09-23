@@ -16,7 +16,7 @@
       "functions": {
         "src/vercel.js": {
           "maxDuration": 60,
-          "memory": 1024
+          "memory": 512
         }
       }
     }

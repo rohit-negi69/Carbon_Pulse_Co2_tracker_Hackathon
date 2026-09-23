@@ -5,7 +5,7 @@ import {
 } from './hub.js';
 import { WS_PATH } from './ws.js';
 import { COMMANDS } from './commands.js';
-import { tickState } from './ticks.js';
+import { tickState, gridState } from './ticks.js';
 import { dbMode } from '../../db/index.js';
 import { buildSnapshot } from './snapshot.js';
 
@@ -77,11 +77,14 @@ router.get('/stream', async (req, res) => {
 });
 
 // Current state without keeping a connection open (used by the polling fallback).
+// The grid reading rides along so a polled client still gets the live intensity
+// card — otherwise that signal would only ever exist on an open stream.
 router.get('/stream/state', async (_req, res, next) => {
   try {
     res.json({
       metrics: metrics(),
       presence: presence(),
+      grid: gridState(),
       snapshot: await buildSnapshot(),
     });
   } catch (err) {

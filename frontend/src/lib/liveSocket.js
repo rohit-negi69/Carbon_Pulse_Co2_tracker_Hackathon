@@ -21,7 +21,18 @@ const MAX_QUEUE = 25;
 const COMMAND_TIMEOUT = 9000;
 const CHAT_TIMEOUT = 45_000;
 const POLL_MS = 8000;
+const POLL_HIDDEN_MS = 30_000;
+// A stream that ends on schedule (a serverless duration cap, a proxy timeout)
+// is back in well under a second. Only a gap longer than this is shown.
+const RECONNECT_GRACE_MS = 2500;
 const WS_PATH = `${API.replace(/\/$/, '')}/ws`;
+
+// Deployment-level transport preference. A serverless host cannot hold an open
+// stream, so a deployment can set VITE_TRANSPORT=polling: each poll is a short
+// request instead of a function invocation held open for the tab's lifetime,
+// which is what makes an idle tab cheap. Unset keeps the full ladder.
+const PREFERRED = (import.meta.env.VITE_TRANSPORT || '').toLowerCase();
+const INITIAL_MODE = ['websocket', 'sse', 'polling'].includes(PREFERRED) ? PREFERRED : 'websocket';
 
 const REST_FALLBACK = {
   ping: () => fetch(`${API}/telemetry`).then(json),
@@ -109,13 +120,14 @@ export class LiveConnection {
     this.onState = onState || null;
     this.socket = null;
     this.source = null;
-    this.timers = { poll: null, ping: null, retry: null, typing: null };
+    this.timers = { poll: null, ping: null, retry: null, typing: null, grace: null };
     this.pending = new Map();
     this.queue = [];
     this.seq = 0;
     this.attempts = 0;
     this.running = false;
-    this.mode = 'websocket';
+    this.mode = INITIAL_MODE;
+    this.state.mode = INITIAL_MODE;
     this.everOpen = false;
     this.restFallback = { ...REST_FALLBACK };
   }
@@ -126,15 +138,22 @@ export class LiveConnection {
     if (this.running) return this;
     this.running = true;
     this._connect();
-    this.timers.ping = setInterval(() => this._probe(), 12_000);
+    // Polls already carry metrics, so the extra telemetry probe would only
+    // double the request count of an idle tab.
+    if (this.mode !== 'polling') this.timers.ping = setInterval(() => this._probe(), 12_000);
     return this;
   }
 
   stop() {
     this.running = false;
     clearInterval(this.timers.ping);
-    clearInterval(this.timers.poll);
+    clearTimeout(this.timers.poll);
     clearTimeout(this.timers.retry);
+    clearTimeout(this.timers.grace);
+    if (this._onVisible && typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this._onVisible);
+      this._onVisible = null;
+    }
     try {
       this.socket?.close();
     } catch {
@@ -153,6 +172,24 @@ export class LiveConnection {
   _patch(patch) {
     this.state = { ...this.state, ...patch };
     this.onState?.(this.state);
+  }
+
+  /**
+   * Announce a reconnect only once the gap is real. Flashing "reconnecting"
+   * for a sub-second blip reads as breakage when nothing actually broke.
+   */
+  _noteDrop() {
+    if (this.timers.grace) return;
+    this.timers.grace = setTimeout(() => {
+      this.timers.grace = null;
+      if (!this.running) return;
+      this._patch({ status: 'reconnecting', reconnects: this.state.reconnects + 1 });
+    }, RECONNECT_GRACE_MS);
+  }
+
+  _clearDrop() {
+    clearTimeout(this.timers.grace);
+    this.timers.grace = null;
   }
 
   // --------------------------------------------------------------- connect
@@ -204,7 +241,7 @@ export class LiveConnection {
 
     socket.onclose = () => {
       if (!this.running || this.mode !== 'websocket') return;
-      this._patch({ status: 'reconnecting', reconnects: this.state.reconnects + 1 });
+      this._noteDrop();
       this.attempts += 1;
       // Zig-zag attempts, then hand over to SSE rather than retrying forever.
       if (!this.everOpen && this.attempts >= 2) {
@@ -236,6 +273,7 @@ export class LiveConnection {
       } catch {
         /* ignore malformed frame */
       }
+      this._clearDrop();
       this._seedPosition(data);
       this._patch({
         status: 'live',
@@ -265,7 +303,7 @@ export class LiveConnection {
 
     source.onerror = () => {
       if (!this.running || this.mode !== 'sse') return;
-      this._patch({ status: 'reconnecting', reconnects: this.state.reconnects + 1 });
+      this._noteDrop();
       this.attempts += 1;
       if (source.readyState === 2 && this.attempts >= 2) this._degrade('polling', 'SSE unavailable');
     };
@@ -273,18 +311,50 @@ export class LiveConnection {
 
   _startPolling() {
     this._patch({ status: 'polling', transport: 'polling', mode: 'polling' });
-    const tick = async () => {
-      try {
-        const state = await fetch(`${API}/stream/state`).then(json);
-        this._setSnapshot(state.snapshot);
-        this._patch({ metrics: state.metrics || null, presence: state.presence || [], clients: state.metrics?.subscribers ?? 1 });
-        this._pushLog({ type: 'poll' });
-      } catch (err) {
-        this._patch({ error: err.message });
-      }
+
+    // Returning to a backgrounded tab should refresh at once rather than wait
+    // out the idle cadence, so it can be slow without feeling stale.
+    this._onVisible = () => {
+      if (typeof document === 'undefined' || document.hidden) return;
+      clearTimeout(this.timers.poll);
+      this._poll();
     };
-    tick();
-    this.timers.poll = setInterval(tick, POLL_MS);
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this._onVisible);
+
+    this._poll();
+  }
+
+  async _poll() {
+    const started = Date.now();
+    try {
+      const state = await fetch(`${API}/stream/state`).then(json);
+      this._setSnapshot(state.snapshot);
+      this._patch({
+        metrics: state.metrics || null,
+        presence: state.presence || [],
+        clients: state.metrics?.subscribers ?? 1,
+        latencyMs: Date.now() - started,
+      });
+      // The grid reading arrives in the same response, so the live-intensity
+      // card keeps working without an open stream.
+      if (state.grid) this._patch({ grid: state.grid });
+      this._pushLog({ type: 'poll' });
+    } catch (err) {
+      this._patch({ error: err.message });
+    }
+    this._schedulePoll();
+  }
+
+  /**
+   * Cadence is the cost dial: a visible tab polls on the tick interval, a
+   * backgrounded one backs off — most of an idle tab's lifetime is time nobody
+   * is looking at it.
+   */
+  _schedulePoll() {
+    if (!this.running || this.mode !== 'polling') return;
+    const hidden = typeof document !== 'undefined' && document.hidden;
+    clearTimeout(this.timers.poll);
+    this.timers.poll = setTimeout(() => this._poll(), hidden ? POLL_HIDDEN_MS : POLL_MS);
   }
 
   _degrade(nextMode, reason) {
@@ -307,6 +377,7 @@ export class LiveConnection {
   _onSocketMessage(message) {
     const { kind } = message;
     if (kind === 'hello') {
+      this._clearDrop();
       this._serverOffset = (message.data.serverTime || Date.now()) - Date.now();
       this._seedPosition(message.data);
       this._patch({

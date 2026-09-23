@@ -26,6 +26,7 @@ const state = {
   timer: null,
   ticks: 0,
   grid: null, // { intensity, source, region, trend, updatedAt }
+  payload: null, // the last grid frame exactly as subscribers received it
   history: [], // rolling intensity sparkline
   lastLiveFetch: 0,
   cleanest: null, // best upcoming low-carbon window, refreshed hourly
@@ -93,19 +94,19 @@ async function tick() {
   // now next to the fixed brief factor so the two are never confused.
   const electricityNow = Number((grid.intensity * 1).toFixed(3));
 
-  publish(
-    'grid',
-    {
-      grid: {
-        ...grid,
-        spark: state.history.map((h) => h.kg),
-        electricityNow,
-        briefFactor: 0.8,
-        cleanestWindow: cleanest,
-      },
-    },
-    { replay: false }
-  );
+  const payload = {
+    ...grid,
+    spark: state.history.map((h) => h.kg),
+    electricityNow,
+    briefFactor: 0.8,
+    cleanestWindow: cleanest,
+  };
+
+  // Kept so polled clients (which hold no stream) get the identical reading
+  // rather than a second, slightly different computation.
+  state.payload = payload;
+
+  publish('grid', { grid: payload }, { replay: false });
 
   publish(
     'telemetry',
@@ -135,6 +136,14 @@ export function startTicks({ intervalMs = TICK_MS } = {}) {
 export function stopTicks() {
   if (state.timer) clearInterval(state.timer);
   state.timer = null;
+}
+
+/**
+ * The current grid frame, or null before the first tick. Polled clients read
+ * this so the live-intensity card works without an open stream.
+ */
+export function gridState() {
+  return state.payload;
 }
 
 export function tickState() {
