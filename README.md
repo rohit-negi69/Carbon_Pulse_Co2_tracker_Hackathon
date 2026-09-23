@@ -112,10 +112,20 @@ To enable the optional LLM upgrade, add a `backend/.env`:
 
 ```
 MONGODB_URI=mongodb+srv://user:pass@cluster/carbonpulse
-OPENAI_API_KEY=sk-...            # optional — chat + audit get LLM-written replies
-OPENAI_MODEL=gpt-4o-mini         # optional
+
+# LLM — Ollama (cloud or local) is preferred when both are set
+OLLAMA_API_KEY=...               # key from ollama.com → Settings → Keys
+OLLAMA_MODEL=gpt-oss:120b        # cloud models: gpt-oss:120b, qwen3-coder:480b, deepseek-v3.1:671b, …
+OLLAMA_BASE_URL=https://ollama.com/v1   # or http://localhost:11434/v1 for a local Ollama
+
+# …or classic OpenAI
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-4o-mini
+
 CLIENT_ORIGIN=http://localhost:5173
 ```
+
+Ollama Cloud speaks the OpenAI-compatible protocol, so chat and the audit get LLM-written replies through the same hybrid engine — reasoning `<think>` preambles are stripped automatically. Check `GET /api/health` → `llm` to see the active provider and model.
 
 ## 🔑 Test credentials
 
@@ -183,6 +193,15 @@ CLIENT_ORIGIN=http://localhost:5173
 `ping` · `stats.get` · `activity.log` · `activity.delete` · `activity.list` · `target.set` · `chat.ask` · `insights.get` · `simulate` · `audit.get` · `nudges.get` · `presence.typing` · `session.describe`
 
 **Standard API for track:** ❌ Not implemented for the Climate Tech track — CarbonPulse exposes its own documented REST API **plus a documented bidirectional WebSocket API**, and is designed to be graded by either a browser agent driving the UI or a script driving the socket/REST endpoints directly.
+
+## 🌱 Demo data
+
+```bash
+cd backend && npm run seed        # add ~6 weeks of realistic demo data (skips if the ledger already has entries)
+cd backend && npm run seed:reset  # wipe and reseed
+```
+
+Fills every category with a believable weekday/weekend routine, occasional flight spikes, and a light downward trend — then sets a data-driven weekly target so the pace gauge, exceed flag and nudges all have something real to show. Works against MongoDB or the in-memory fallback.
 
 ## 🎥 Demo
 
