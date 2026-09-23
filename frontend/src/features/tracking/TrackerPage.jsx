@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
+import LiveMap from './LiveMap.jsx';
+import LivePositionCard from './LivePositionCard.jsx';
+import { INDIA } from './positioning.js';
 import {
   Card, Icon, Badge, LiveDot, SectionHeading, Skeleton, EmptyState, CountUp, Progress, CATEGORY_META,
 } from '../../components/ui/index.jsx';
@@ -224,12 +227,18 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
   const [busy, setBusy] = useState(false);
   const [autoLog, setAutoLog] = useState(true);
   const [simPreset, setSimPreset] = useState(SIM_PRESETS[0].id);
+  const [mapUnavailable, setMapUnavailable] = useState(false);
 
   const watchRef = useRef(null);
   const simRef = useRef(null);
   const bufferRef = useRef([]);
   const flushRef = useRef(null);
   const originRef = useRef(null);
+  // The session id as a ref: callbacks scheduled in the same tick that the
+  // session is created (simulation start, fix buffering) must see the id
+  // immediately, not one render later — the memoised closures would otherwise
+  // capture `undefined` and silently drop every fix.
+  const sessionRef = useRef(null);
 
   const loadTrips = useCallback(() => {
     api.trips().then((r) => setTrips(r.trips || [])).catch(() => setTrips([]));
@@ -270,7 +279,7 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
     async (id, { force = false } = {}) => {
       if (!id) return;
       const batch = bufferRef.current;
-      if (!batch.length || (!force && batch.length < 3)) return;
+      if (!id || !batch.length || (!force && batch.length < 3)) return;
       bufferRef.current = [];
       try {
         const res = await api.pushTripPoints(id, batch);
@@ -286,12 +295,13 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
     (fix) => {
       setPoints((prev) => [...prev, { lat: fix.lat, lon: fix.lon, t: fix.t, accuracy: fix.accuracy ?? null }]);
       bufferRef.current.push(fix);
-      const id = session?.id;
+      const id = sessionRef.current?.id;
+      if (!id) return;
       if (flushRef.current) clearTimeout(flushRef.current);
       flushRef.current = setTimeout(() => flush(id), 2500);
       if (bufferRef.current.length >= 3) flush(id);
     },
-    [flush, session?.id]
+    [flush]
   );
 
   const start = useCallback(
@@ -300,7 +310,9 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
       try {
         const res = await api.startTrip({ label: source === 'device' ? 'Device GPS trip' : 'Simulated trip' });
         const id = res.trip?._id || res.trip?.id;
-        setSession({ id, startedAt: res.trip?.startedAt || new Date().toISOString(), source });
+        const nextSession = { id, startedAt: res.trip?.startedAt || new Date().toISOString(), source };
+        sessionRef.current = nextSession;
+        setSession(nextSession);
         setPoints([]);
         setReading(null);
         bufferRef.current = [];
@@ -352,7 +364,9 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
    */
   const beginSimulation = useCallback(() => {
     const preset = SIM_PRESETS.find((p) => p.id === simPreset) || SIM_PRESETS[0];
-    const base = originRef.current || { lat: 51.5074, lon: -0.1278 };
+    // Traces start from the user's live position when we have one, otherwise
+    // from Connaught Place, New Delhi — the demo map is India-centred.
+    const base = originRef.current || { lat: 28.6139, lon: 77.209 };
     let { lat, lon } = base;
     let heading = 0.6 + Math.random() * 0.6;
     let t = Date.now();
@@ -378,7 +392,7 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
     if (!session) return;
     setBusy(true);
     try {
-      await flush(session.id, { force: true });
+      await flush(sessionRef.current?.id, { force: true });
       stopSensors();
       const res = await api.completeTrip(session.id, { log: autoLog });
       const t = res.trip || {};
@@ -387,6 +401,7 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
           ? `Trip saved — ${t.distanceKm} km as ${ModeLabel(t.mode)} = ${t.co2} kg CO₂`
           : `Trip saved — ${t.distanceKm} km, ${ModeLabel(t.mode)} (no ledger entry)`
       );
+      sessionRef.current = null;
       setSession(null);
       setPoints([]);
       setReading(null);
@@ -406,6 +421,7 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
     try {
       stopSensors();
       await api.discardTrip(session.id);
+      sessionRef.current = null;
       setSession(null);
       setPoints([]);
       setReading(null);
@@ -462,6 +478,9 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
         }
       />
 
+      {/* ------------------------------------------- real-time position (you) */}
+      <LivePositionCard />
+
       <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
         {/* ------------------------------------------------------- capture */}
         <Card className="animate-fade-up p-5 xl:col-span-7">
@@ -505,11 +524,22 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
             </div>
           </div>
 
-          <TraceMap
-            points={points}
-            live={{ source: session?.source }}
-            onEmpty={tracking ? 'Listening for the first fix…' : 'No trace yet — start a trip or run a simulated one.'}
-          />
+          {mapUnavailable ? (
+            <TraceMap
+              points={points}
+              live={{ source: session?.source }}
+              onEmpty={tracking ? 'Listening for the first fix…' : 'No trace yet — start a trip or run a simulated one.'}
+            />
+          ) : (
+            <LiveMap
+              points={points}
+              source={session?.source}
+              height={300}
+              center={INDIA.center}
+              zoom={INDIA.zoom}
+              onUnavailable={() => setMapUnavailable(true)}
+            />
+          )}
 
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
@@ -646,7 +676,9 @@ export default function TrackerPage({ refreshKey, live, onToast, onLogged }) {
                     {t.status === 'active' && (
                       <button
                         onClick={() => {
-                          setSession({ id: t._id || t.id, startedAt: t.startedAt, source: 'device' });
+                          const resumed = { id: t._id || t.id, startedAt: t.startedAt, source: 'device' };
+                          sessionRef.current = resumed;
+                          setSession(resumed);
                           setPoints([]);
                           setReading(null);
                           bufferRef.current = [];

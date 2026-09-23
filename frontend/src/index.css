@@ -311,3 +311,32 @@
     animation-delay: 4s;
   }
 }
+
+/* -------------------------------------------------------------------------- */
+/* Leaflet map theming — keyless OSM tiles, dark-shifted with a CSS filter.    */
+/* -------------------------------------------------------------------------- */
+.cp-tiles-dark {
+  filter: brightness(0.62) invert(1) contrast(2.6) hue-rotate(195deg) brightness(0.85) saturate(0.5);
+}
+.leaflet-container {
+  background: rgb(var(--surface-container-low));
+  font-family: inherit;
+}
+.leaflet-control-attribution {
+  background: rgb(var(--surface-container-lowest) / 0.85) !important;
+  color: rgb(var(--on-surface-variant)) !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a {
+  color: rgb(var(--primary)) !important;
+}
+.leaflet-bar a {
+  background: rgb(var(--surface-container-lowest)) !important;
+  color: rgb(var(--on-surface)) !important;
+  border-color: rgb(var(--outline-variant)) !important;
+}
+.leaflet-control-scale-line {
+  background: rgb(var(--surface-container-lowest) / 0.85) !important;
+  color: rgb(var(--on-surface-variant)) !important;
+  border-color: rgb(var(--outline-variant)) !important;
+}
