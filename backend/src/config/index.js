@@ -8,6 +8,13 @@ export const config = {
   clientOrigin: process.env.CLIENT_ORIGIN || '*',
 
   // Optional AI upgrade — the rule-based copilot works without it.
+  // Two interchangeable OpenAI-compatible providers:
+  //   • Ollama (cloud or local)  — OLLAMA_API_KEY + OLLAMA_BASE_URL + OLLAMA_MODEL
+  //   • OpenAI                   — OPENAI_API_KEY + OPENAI_MODEL
+  // Ollama wins if both are set, so a local-first setup is never overridden.
+  ollamaKey: process.env.OLLAMA_API_KEY || '',
+  ollamaBaseUrl: process.env.OLLAMA_BASE_URL || 'https://ollama.com/v1', // cloud; use http://localhost:11434/v1 for local
+  ollamaModel: process.env.OLLAMA_MODEL || 'gpt-oss:120b',
   openaiKey: process.env.OPENAI_API_KEY || '',
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
 

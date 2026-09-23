@@ -3,7 +3,7 @@ import { dbMode, usingMongo } from '../../db/index.js';
 import { connectedClients, metrics, transportNames } from '../realtime/hub.js';
 import { WS_PATH } from '../realtime/ws.js';
 import { tickState } from '../realtime/ticks.js';
-import { llmEnabled } from '../copilot/llm.js';
+import { llmEnabled, llmProvider } from '../copilot/llm.js';
 import { integrations } from '../../integrations/index.js';
 import { classifierState, describeModels } from '../ml/registry.js';
 
@@ -57,7 +57,7 @@ router.get('/health', (_req, res) => {
     ok: true,
     db: dbMode(),
     dbPersistent: usingMongo(),
-    llm: llmEnabled() ? 'on' : 'off (rule-based chat + audit active)',
+    llm: llmEnabled() ? `on — ${llmProvider().name} · ${llmProvider().model}` : 'off (rule-based chat + audit active)',
     realtime: {
       primary: 'websocket',
       fallbacks: ['server-sent-events', 'polling'],
