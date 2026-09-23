@@ -1,7 +1,19 @@
 # 🌱 CarbonPulse — Real-Time Carbon Footprint Tracker
 
-**Track:** Climate Tech
+[![Live demo](https://img.shields.io/badge/▶_LIVE_DEMO-carbonpulse--coral.vercel.app-006948?style=for-the-badge)](https://carbonpulse-coral.vercel.app)
+[![API](https://img.shields.io/badge/API-/api%2Fdocs-2E7D32?style=flat-square)](https://carbonpulse-coral.vercel.app/api/docs)
+![Track](https://img.shields.io/badge/track-Climate_Tech-43A047?style=flat-square)
+![Backend tests](https://img.shields.io/badge/backend_tests-68%2F68-4CAF50?style=flat-square)
+
 **Hackathon ID:** AZIS-74KWR4
+
+## 🔴 Live demo
+
+**▶ https://carbonpulse-coral.vercel.app** — the full app, deployed on Vercel's free tier. The dashboard, charts, targets, history, GPS trip tracker and the AI copilot are all live; log an entry and watch every open tab update.
+
+- **API:** <https://carbonpulse-coral.vercel.app/api/health> · self-documenting route table at [`/api/docs`](https://carbonpulse-coral.vercel.app/api/docs)
+- **Real-time:** polled sync in the deployment (the client degrades WebSocket → SSE → polling automatically); locally it runs the full bidirectional WebSocket
+- **No sign-up:** open the URL and every feature is available
 
 Turn daily choices — car trips, flights, meals, electricity — into a visible carbon footprint, in real time, with an AI copilot that tells you what actually moves the number.
 
