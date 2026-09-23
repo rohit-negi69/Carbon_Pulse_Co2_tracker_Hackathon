@@ -165,8 +165,9 @@ export class LiveConnection {
     this._patch({ status: 'offline', transport: 'none' });
   }
 
+  /** True whenever state is flowing, on any transport — polling included. */
   get connected() {
-    return this.state.status === 'live';
+    return this.state.status === 'live' || this.state.status === 'polling';
   }
 
   _patch(patch) {
@@ -329,12 +330,18 @@ export class LiveConnection {
     try {
       const state = await fetch(`${API}/stream/state`).then(json);
       this._setSnapshot(state.snapshot);
-      this._patch({
-        metrics: state.metrics || null,
+      const patch = {
         presence: state.presence || [],
         clients: state.metrics?.subscribers ?? 1,
         latencyMs: Date.now() - started,
-      });
+      };
+      if (state.metrics) {
+        patch.metrics = state.metrics;
+        // The telemetry readout (events streamed, rate per minute) rides on the
+        // same object, so polling needs no separate probe to fill it in.
+        patch.telemetry = { ...state.metrics, presence: state.presence || [], transport: 'polling' };
+      }
+      this._patch(patch);
       // The grid reading arrives in the same response, so the live-intensity
       // card keeps working without an open stream.
       if (state.grid) this._patch({ grid: state.grid });

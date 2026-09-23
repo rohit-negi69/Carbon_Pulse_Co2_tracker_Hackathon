@@ -1,5 +1,6 @@
 import { Icon } from '../../components/ui/index.jsx';
 import Sparkline from '../../components/ui/Sparkline.jsx';
+import { isChannelHealthy } from '../../lib/liveStatus.js';
 
 // ---------------------------------------------------------------------------
 // Grid pulse — the always-on real-time signal.
@@ -12,9 +13,10 @@ import Sparkline from '../../components/ui/Sparkline.jsx';
 // ---------------------------------------------------------------------------
 
 export default function GridPulse({ live, onOpenLive }) {
+  // `status` is kept for the transport readout below; health covers polling too.
   const grid = live.grid;
   const status = live.status;
-  const live_ = status === 'live';
+  const live_ = isChannelHealthy(live);
 
   const activityFrames = live.log.filter((f) => f.type === 'activity');
   const sessionKg = Number(activityFrames.reduce((sum, f) => sum + (f.co2 || 0), 0).toFixed(2));

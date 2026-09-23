@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { channelLabel, isChannelHealthy } from '../../lib/liveStatus.js';
 import { Badge, CATEGORY_META, CountUp, Icon, LiveDot } from '../../components/ui/index.jsx';
 import Photo from '../../components/ui/Photo.jsx';
 import AuroraField from '../../components/layout/AuroraField.jsx';
@@ -169,7 +170,7 @@ function HeroStat({ label, value, unit, decimals = 0, accent }) {
 }
 function Hero({ data, live, onEnter, onOpenCopilot }) {
   const week = data.week;
-  const liveStatus = live?.status === 'live';
+  const liveStatus = isChannelHealthy(live);
   const transport = live?.transport === 'websocket' ? 'WebSocket' : live?.transport === 'sse' ? 'SSE' : 'Polling';
 
   return (
@@ -183,7 +184,7 @@ function Hero({ data, live, onEnter, onOpenCopilot }) {
             </Badge>
             <Badge tone={liveStatus ? 'live' : 'neutral'}>
               <LiveDot tone={liveStatus ? 'primary' : 'amber'} size={5} />
-              {liveStatus ? `${transport} live` : 'Demo build'}
+              {liveStatus ? channelLabel(live) : 'Demo build'}
             </Badge>
             <Badge tone="info">No sign-up required</Badge>
           </div>

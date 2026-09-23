@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { channelShort } from '../../lib/liveStatus.js';
 import { Icon, CATEGORY_META } from '../../components/ui/index.jsx';
 
 const QUICK_PROMPTS = [
@@ -108,7 +109,7 @@ export default function Copilot({ open, onClose, onLogged, seed, live }) {
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
                 {audit?.engine ? `${audit.engine}` : 'connecting…'}
                 <span className="text-on-surface-variant">
-                  · {live?.status === 'live' ? `${live.transport === 'websocket' ? 'webSocket' : live.transport} stream` : 'offline queue'}
+                  · {channelShort(live)}
                 </span>
               </div>
             </div>

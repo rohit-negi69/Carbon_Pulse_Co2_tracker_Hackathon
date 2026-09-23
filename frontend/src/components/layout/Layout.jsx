@@ -4,6 +4,7 @@ import NudgeCenter from '../../features/nudges/NudgeCenter.jsx';
 import PresencePill from '../../features/realtime/PresencePill.jsx';
 import AuroraField from './AuroraField.jsx';
 import { useTheme } from '../../lib/useTheme.js';
+import { channelLabel, isChannelHealthy } from '../../lib/liveStatus.js';
 
 // The header mirrors the architecture's frontend tiles:
 // Dashboard · Log Activity · Charts & Insights · Set Targets · History & Filters,
@@ -119,9 +120,8 @@ export default function Layout({
     };
   }, [tab]);
 
-  const liveStatus = live?.status === 'live';
-  const transportLabel =
-    live?.transport === 'websocket' ? 'WebSocket' : live?.transport === 'sse' ? 'SSE stream' : live?.transport === 'polling' ? 'Polling' : 'Connecting';
+  const liveStatus = isChannelHealthy(live);
+  const liveLabel = channelLabel(live);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -233,7 +233,7 @@ export default function Layout({
             <span className="flex items-center gap-1.5">
               <LiveDot tone={liveStatus ? 'primary' : 'amber'} size={6} />
               <span className={liveStatus ? 'font-semibold text-primary' : 'font-semibold text-amber'}>
-                {liveStatus ? `${transportLabel} live` : 'Reconnecting'}
+                {liveLabel}
               </span>
             </span>
             <span className="text-outline">·</span>

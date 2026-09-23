@@ -3,6 +3,7 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine,
 } from 'recharts';
 import { api } from '../../lib/api.js';
+import { isChannelHealthy } from '../../lib/liveStatus.js';
 import {
   Card, Icon, StatCard, CountUp, Badge, LiveDot, SectionHeading, Skeleton, EmptyState, CATEGORY_META,
 } from '../../components/ui/index.jsx';
@@ -164,7 +165,7 @@ export default function IntelligencePage({ refreshKey, live, onToast }) {
         className="animate-fade-up"
         eyebrow={
           <>
-            <LiveDot tone={live?.status === 'live' ? 'primary' : 'amber'} size={6} />
+            <LiveDot tone={isChannelHealthy(live) ? 'primary' : 'amber'} size={6} />
             {models.length} models deployed · validated against your ledger
           </>
         }

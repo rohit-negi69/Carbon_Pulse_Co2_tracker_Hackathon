@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 import { api } from '../../lib/api.js';
+import { channelHeadline, isChannelHealthy, transportLabel } from '../../lib/liveStatus.js';
 import {
   Card,
   AuroraCard,
@@ -121,9 +122,9 @@ export default function Dashboard({ refreshKey, live, onGoToTarget, onOpenCopilo
           <div className="flex min-w-0 flex-col justify-between gap-5">
             <div>
               <div className="mb-2.5 flex flex-wrap items-center gap-2">
-                <Badge tone={live?.status === 'live' ? 'live' : 'warn'}>
-                  <LiveDot tone={live?.status === 'live' ? 'primary' : 'amber'} size={6} />
-                  {live?.status === 'live' ? 'Real-time stream' : 'Reconnecting'}
+                <Badge tone={isChannelHealthy(live) ? 'live' : 'warn'}>
+                  <LiveDot tone={isChannelHealthy(live) ? 'primary' : 'amber'} size={6} />
+                  {channelHeadline(live)}
                 </Badge>
                 <Badge tone="primary">
                   <Icon name="verified" size={11} /> Factors fixed per brief
@@ -328,8 +329,8 @@ export default function Dashboard({ refreshKey, live, onGoToTarget, onOpenCopilo
           delay={180}
           footer={
             <>
-              <LiveDot tone={live?.status === 'live' ? 'primary' : 'amber'} size={5} />
-              {live?.transport === 'websocket' ? 'WebSocket' : live?.transport === 'sse' ? 'SSE' : 'Polling'}
+              <LiveDot tone={isChannelHealthy(live) ? 'primary' : 'amber'} size={5} />
+              {transportLabel(live)}
               {live?.latencyMs != null && <span className="tabular">· {live.latencyMs} ms</span>}
               {live?.telemetry?.eventsLastMinute != null && <span className="tabular">· {live.telemetry.eventsLastMinute}/min</span>}
             </>

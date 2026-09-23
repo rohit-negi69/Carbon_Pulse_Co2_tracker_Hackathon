@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Icon, LiveDot } from '../../components/ui/index.jsx';
+import { isChannelHealthy } from '../../lib/liveStatus.js';
 
 // Presence: how many sessions are connected, how long they've been open, and
 // how healthy the live channel is.
@@ -8,7 +9,7 @@ const TRANSPORT_LABEL = { websocket: 'WS', sse: 'SSE', polling: 'Poll', none: '�
 
 export default function PresencePill({ live }) {
   const [open, setOpen] = useState(false);
-  const live_ = live.status === 'live';
+  const live_ = isChannelHealthy(live);
   const count = live.clients || 1;
 
   return (
@@ -24,7 +25,7 @@ export default function PresencePill({ live }) {
       >
         <LiveDot tone={live_ ? 'primary' : 'amber'} size={6} />
         <span className="tabular">
-          {live_ ? `${TRANSPORT_LABEL[live.transport] || 'Live'} · ${count}` : live.status === 'polling' ? 'Sync' : 'Reconnecting'}
+          {live_ ? `${TRANSPORT_LABEL[live.transport] || 'Live'} · ${count}` : 'Reconnecting'}
         </span>
       </button>
 

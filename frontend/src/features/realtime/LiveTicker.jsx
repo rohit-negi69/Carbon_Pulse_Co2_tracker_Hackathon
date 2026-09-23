@@ -1,3 +1,4 @@
+import { isChannelHealthy } from '../../lib/liveStatus.js';
 import { Icon, CATEGORY_META } from '../../components/ui/index.jsx';
 
 // The live ticker: every event that lands on the real-time channel (WebSocket
@@ -31,15 +32,13 @@ export default function LiveTicker({ live, limit = 8 }) {
           <h2 className="font-headline text-[15px] font-semibold text-on-surface">Live event stream</h2>
           <span
             className={`pill ${
-              live.status === 'live'
-                ? 'bg-emerald-soft text-emerald'
-                : live.status === 'polling'
-                  ? 'bg-amber-soft text-amber'
-                  : 'bg-surface-container-high text-on-surface-variant'
+              isChannelHealthy(live) ? 'bg-emerald-soft text-emerald' : 'bg-surface-container-high text-on-surface-variant'
             }`}
           >
-            <span className={`h-1.5 w-1.5 rounded-full ${live.status === 'live' ? 'animate-pulse bg-primary' : 'bg-amber'}`} />
-            {live.status === 'live' ? 'streaming' : live.status}
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${isChannelHealthy(live) ? 'animate-pulse bg-primary' : 'bg-amber'}`}
+            />
+            {isChannelHealthy(live) ? (live.transport === 'polling' ? 'polling' : 'streaming') : live.status}
           </span>
         </div>
         <span className="text-[11px] font-medium text-outline">

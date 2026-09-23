@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
+import { isChannelHealthy } from '../../lib/liveStatus.js';
 import { Card, Icon, Progress, SectionHeading, RadialGauge, CountUp, Badge } from '../../components/ui/index.jsx';
 
 export default function WeeklyTarget({ week, refreshKey, onSaved, onToast, live }) {
@@ -82,7 +83,7 @@ export default function WeeklyTarget({ week, refreshKey, onSaved, onToast, live 
               </div>
               <p className="mt-1 text-[12.5px] text-on-surface-variant">
                 Week {weekData.start} → {weekData.end} · day {daysElapsed} of 7 · {daysRemaining} day(s) remaining
-                {live?.status === 'live' && <span className="ml-2 text-primary">· live</span>}
+                {isChannelHealthy(live) && <span className="ml-2 text-primary">· live</span>}
               </p>
 
               <div className="mt-3 grid grid-cols-3 gap-2">

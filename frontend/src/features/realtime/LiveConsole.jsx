@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Icon, Card, StatCard, SectionHeading } from '../../components/ui/index.jsx';
 import Sparkline from '../../components/ui/Sparkline.jsx';
+import { isChannelHealthy } from '../../lib/liveStatus.js';
 
 // ---------------------------------------------------------------------------
 // Live Ops — the real-time control room.
@@ -148,7 +149,7 @@ export default function LiveConsole({ live, onToast }) {
     return run(cmd, payload);
   }
 
-  const live_ = live.status === 'live';
+  const live_ = isChannelHealthy(live);
 
   return (
     <div className="flex w-full flex-col gap-5">
@@ -166,7 +167,7 @@ export default function LiveConsole({ live, onToast }) {
           <div className="flex items-center gap-2">
           <span
             className={`pill ${
-              live_ ? 'bg-emerald-soft text-emerald' : live.status === 'polling' ? 'bg-amber-soft text-amber' : 'bg-surface-container-high text-on-surface-variant'
+              live_ ? 'bg-emerald-soft text-emerald' : 'bg-surface-container-high text-on-surface-variant'
             }`}
           >
             <span className={`h-1.5 w-1.5 rounded-full ${live_ ? 'animate-pulse bg-primary' : 'bg-amber'}`} />

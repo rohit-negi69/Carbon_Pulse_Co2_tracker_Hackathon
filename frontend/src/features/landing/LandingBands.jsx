@@ -1,4 +1,5 @@
 import { Badge, CATEGORY_META, CountUp, Icon, LiveDot } from '../../components/ui/index.jsx';
+import { channelLabel, isChannelHealthy, transportLabel } from '../../lib/liveStatus.js';
 import Photo from '../../components/ui/Photo.jsx';
 
 // ---------------------------------------------------------------------------
@@ -26,15 +27,9 @@ function Stat({ label, value, unit, decimals = 0 }) {
 }
 export function LiveBand({ live }) {
   const grid = live?.grid;
-  const status = live?.status;
-  const transport =
-    live?.transport === 'websocket'
-      ? 'WebSocket'
-      : live?.transport === 'sse'
-        ? 'SSE stream'
-        : live?.transport === 'polling'
-          ? 'Polling'
-          : 'Connecting';
+  const healthy = isChannelHealthy(live);
+  const transport = transportLabel(live);
+  const transportText = healthy ? transport : live?.status || '—';
 
   return (
     <section id="live" className="scroll-mt-24">
@@ -42,9 +37,9 @@ export function LiveBand({ live }) {
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
           <div className="flex flex-col justify-center gap-4 p-5 md:p-7">
             <div className="flex flex-wrap items-center gap-2">
-              <Badge tone={status === 'live' ? 'live' : 'warn'}>
-                <LiveDot tone={status === 'live' ? 'primary' : 'amber'} size={6} />
-                {status === 'live' ? `${transport} live` : 'Reconnecting'}
+              <Badge tone={healthy ? 'live' : 'warn'}>
+                <LiveDot tone={healthy ? 'primary' : 'amber'} size={6} />
+                {channelLabel(live)}
               </Badge>
               <Badge tone="primary">No polling spinner, ever</Badge>
             </div>
@@ -58,7 +53,7 @@ export function LiveBand({ live }) {
             </p>
 
             <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-              <Stat label="Transport" value={status === 'live' ? transport : status || '—'} />
+              <Stat label="Transport" value={transportText} />
               <Stat label="Round trip" value={live?.latencyMs != null ? live.latencyMs : '—'} unit="ms" />
               <Stat label="Sessions" value={live?.clients ?? 1} />
               <Stat label="Last seq" value={live?.lastEventId != null ? live.lastEventId : '—'} />
