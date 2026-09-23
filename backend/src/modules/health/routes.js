@@ -58,6 +58,11 @@ router.get('/health', (_req, res) => {
     db: dbMode(),
     dbPersistent: usingMongo(),
     llm: llmEnabled() ? `on — ${llmProvider().name} · ${llmProvider().model}` : 'off (rule-based chat + audit active)',
+    // Actionable from the deployed URL: nobody should have to read the source to
+    // find out why the copilot is answering from rules.
+    llmHint: llmEnabled()
+      ? null
+      : 'Set OLLAMA_API_KEY (ollama.com → Settings → Keys) to use cloud models, or OLLAMA_BASE_URL=http://localhost:11434/v1 for a local server.',
     realtime: {
       primary: 'websocket',
       fallbacks: ['server-sent-events', 'polling'],
