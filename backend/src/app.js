@@ -17,6 +17,10 @@ export function createApp() {
   const app = express();
 
   app.disable('x-powered-by');
+  // Behind a managed proxy (Vercel) the caller's address arrives in
+  // X-Forwarded-For. Trusting exactly one hop makes rate limiting per-client
+  // instead of per-proxy, without letting a caller spoof it locally.
+  if (process.env.VERCEL) app.set('trust proxy', 1);
   app.use(express.json({ limit: '64kb' }));
   app.use(cors({ origin: config.clientOrigin }));
   app.use(requestLog);
