@@ -6,6 +6,7 @@ import { config } from '../../config/index.js';
 //   Ollama (cloud or local) — OLLAMA_API_KEY, default base https://ollama.com/v1
 //     cloud:  OLLAMA_API_KEY=sk-...            (key from ollama.com → Settings)
 //     local:  OLLAMA_BASE_URL=http://localhost:11434/v1  (key optional, ignored)
+//     tunnel: OLLAMA_BASE_URL=https://<id>.lhr.life/v1   (a deployed app reaching a machine at home)
 //   OpenAI — OPENAI_API_KEY (classic path, unchanged)
 //
 // Ollama is preferred when both are configured. Without any key the caller
@@ -18,13 +19,15 @@ const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 const isLocalOllama = () => /localhost|127\.0\.0\.1/.test(config.ollamaBaseUrl);
 
 const provider = () => {
-  // A local Ollama server needs no key (it may even ignore one), so a
-  // localhost base URL activates the provider on its own.
-  if (config.ollamaKey || isLocalOllama()) {
+  // A base URL the operator set is itself the opt-in: a local server needs no
+  // key (it may even ignore one), and neither does a tunnelled one pointing at
+  // a machine at home. Only the default cloud URL requires a key.
+  if (config.ollamaKey || config.ollamaBaseUrlExplicit) {
+    const kind = isLocalOllama() ? 'local' : config.ollamaKey ? 'cloud' : 'tunnel';
     return {
-      name: `ollama (${isLocalOllama() ? 'local' : 'cloud'})`,
+      name: `ollama (${kind})`,
       url: `${config.ollamaBaseUrl.replace(/\/$/, '')}/chat/completions`,
-      key: config.ollamaKey || 'ollama', // required by OpenAI clients, ignored locally
+      key: config.ollamaKey || 'ollama', // required by OpenAI clients, ignored by Ollama
       model: config.ollamaModel,
     };
   }

@@ -151,9 +151,23 @@ Or import the repo at [vercel.com/new](https://vercel.com/new) — the committed
 | Real-time transport | WebSocket | **SSE, then polling** — Vercel cannot hold a WebSocket |
 | Storage | in-memory or MongoDB | ephemeral per instance unless `MONGODB_URI` is set |
 | Grid ticker | 4 s interval | one immediate tick per instance |
-| Copilot LLM | local Ollama works | needs a reachable provider — a `localhost` Ollama is not; set `OLLAMA_API_KEY` (Ollama Cloud) or leave it off for the rule-based engine |
+| Copilot LLM | local Ollama works | needs a reachable provider — `localhost` is the container itself; use the tunnel below, or set `OLLAMA_API_KEY` (Ollama Cloud) |
 
 The transport change needs no code: the client's ladder already falls through WebSocket → SSE → polling on its own. The **storage** change does matter — each serverless instance starts empty, so either set `MONGODB_URI` for a durable ledger (free Atlas tier below) or leave `DEMO_SEED=1` so every cold start reseeds six weeks of demo data. Without one of the two, the dashboard opens empty.
+
+### Running the copilot on your own machine
+
+A deployment cannot reach `localhost`, so the Ollama app on this laptop is out of reach as-is. Tunnel it instead of buying a key:
+
+```bash
+./scripts/local-llm-tunnel.sh link     # tunnel local Ollama → set OLLAMA_BASE_URL → redeploy
+./scripts/local-llm-tunnel.sh status   # is it up, and on which URL?
+./scripts/local-llm-tunnel.sh stop     # close it
+```
+
+It opens a free SSH tunnel ([localhost.run](https://localhost.run) — no account, no install) and points the project at it, so the deployed copilot answers with the model you already run locally. `/api/health` reports which route is live (`ollama (tunnel)`, `ollama (cloud)`, `ollama (local)` or off).
+
+Two things to know: it only works while this machine is awake, and a reconnected tunnel can get a different URL — re-run `link` if the copilot reverts to the rule engine. While it is open, anyone who learns the URL can use your Ollama, so close it when you are done.
 
 ### MongoDB Atlas (free tier)
 1. Create a free cluster at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas).

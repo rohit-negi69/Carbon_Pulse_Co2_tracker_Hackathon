@@ -3,22 +3,32 @@
 import 'dotenv/config';
 
 /**
+ * Resolve where the Ollama provider lives.
+ *
  * A base URL pointing at someone's laptop can never work from a deployed
  * container, where localhost is the container itself. Rather than let a copied
  * local .env silently degrade to the rule engine, prefer Ollama Cloud and say
  * why in the logs.
+ *
+ * `explicit` marks a base URL the operator actually set. That matters because
+ * setting one is itself the opt-in: a local server needs no key, and neither
+ * does a tunnelled one — only the default cloud URL does.
  */
-function resolveOllamaBaseUrl() {
-  const configured = process.env.OLLAMA_BASE_URL || 'https://ollama.com/v1';
+function resolveOllama() {
+  const configured = (process.env.OLLAMA_BASE_URL || '').trim();
   const pointsAtLocalhost = /(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(configured);
-  if (pointsAtLocalhost && process.env.VERCEL) {
+
+  if (configured && pointsAtLocalhost && process.env.VERCEL) {
     console.warn(
       '[config] OLLAMA_BASE_URL points at localhost, which is unreachable from a deployment — using https://ollama.com/v1. Set OLLAMA_API_KEY to enable cloud models.'
     );
-    return 'https://ollama.com/v1';
+    return { url: 'https://ollama.com/v1', explicit: false };
   }
-  return configured;
+
+  return { url: configured || 'https://ollama.com/v1', explicit: Boolean(configured) };
 }
+
+const ollama = resolveOllama();
 
 export const config = {
   port: Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 3000,
@@ -31,7 +41,8 @@ export const config = {
   //   • OpenAI                   — OPENAI_API_KEY + OPENAI_MODEL
   // Ollama wins if both are set, so a local-first setup is never overridden.
   ollamaKey: process.env.OLLAMA_API_KEY || '',
-  ollamaBaseUrl: resolveOllamaBaseUrl(), // cloud; http://localhost:11434/v1 for a local server
+  ollamaBaseUrl: ollama.url, // cloud; http://localhost:11434/v1 locally, or a tunnel URL for a deployed app
+  ollamaBaseUrlExplicit: ollama.explicit, // an operator-set base URL counts as opting in
   ollamaModel: process.env.OLLAMA_MODEL || 'gpt-oss:120b',
   openaiKey: process.env.OPENAI_API_KEY || '',
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
