@@ -13,3 +13,4 @@ frontend/preview.html
 .vite/
 node_modules/
 
+.env*

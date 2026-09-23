@@ -131,23 +131,29 @@ Ollama Cloud speaks the OpenAI-compatible protocol, so chat and the audit get LL
 
 **None required — there is no authentication by design.** Open the URL and every feature is available. If `MONGODB_URI` is unset the server uses its in-memory store (data resets on restart); set the URI for durable data.
 
-## ☁️ Deploy to Vercel (2 projects)
+## ☁️ Deploy to Vercel (one project, free)
 
-### 1. Backend — root directory `backend/`
-1. Push this repo to GitHub, then in Vercel: **Add New → Project → import the repo**.
-2. Set **Root Directory** to `backend`.
-3. Environment variables:
-   - `MONGODB_URI` — MongoDB Atlas connection string
-   - `CLIENT_ORIGIN` — the frontend URL (for CORS)
-   - `OPENAI_API_KEY` — *optional*
-4. Deploy and note the URL, e.g. `https://carbonpulse-api.vercel.app`.
+The committed `vercel.json` deploys the whole app as a **single project using [Vercel Services](https://vercel.com/docs/services)**: the React app is built and served from the CDN at `/`, and the Express API runs as a function behind `/api/*`. There is no second project to wire up and no `VITE_API_URL` to set — the client already talks to a relative `/api`.
 
-### 2. Frontend — root directory `frontend/`
-1. **Add New → Project → import the same repo**, set **Root Directory** to `frontend`.
-2. Add `VITE_API_URL` = `https://carbonpulse-api.vercel.app/api`.
-3. Deploy — share **this** URL as the submission link.
+```bash
+npm i -g vercel
+vercel link --project carbonpulse          # also connects the GitHub repo for auto-deploy
+vercel env add DEMO_SEED production        # optional: 1 → a fresh instance boots with demo data
+vercel --prod
+```
 
-> SSE works on Vercel Node functions; if a proxy buffers the stream the client automatically falls back to polling, so the UI stays live either way.
+Or import the repo at [vercel.com/new](https://vercel.com/new) — the committed config drives the build, so no root directory needs setting. Pushes to `main` then deploy automatically.
+
+### What changes in a serverless deployment
+
+| | Local (`npm run dev`) | Vercel |
+| --- | --- | --- |
+| Real-time transport | WebSocket | **SSE, then polling** — Vercel cannot hold a WebSocket |
+| Storage | in-memory or MongoDB | ephemeral per instance unless `MONGODB_URI` is set |
+| Grid ticker | 4 s interval | one immediate tick per instance |
+| Copilot LLM | local Ollama works | needs a reachable provider — a `localhost` Ollama is not; set `OLLAMA_API_KEY` (Ollama Cloud) or leave it off for the rule-based engine |
+
+The transport change needs no code: the client's ladder already falls through WebSocket → SSE → polling on its own. The **storage** change does matter — each serverless instance starts empty, so either set `MONGODB_URI` for a durable ledger (free Atlas tier below) or leave `DEMO_SEED=1` so every cold start reseeds six weeks of demo data. Without one of the two, the dashboard opens empty.
 
 ### MongoDB Atlas (free tier)
 1. Create a free cluster at [mongodb.com/cloud/atlas](https://www.mongodb.com/cloud/atlas).
