@@ -1,0 +1,6 @@
+{
+  "name": "CarbonPulse",
+  "description": "Real-time carbon footprint tracker with an AI eco-audit copilot, predictive analytics, and live telemetry.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

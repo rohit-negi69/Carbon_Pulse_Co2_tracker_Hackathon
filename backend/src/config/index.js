@@ -3,7 +3,7 @@
 import 'dotenv/config';
 
 export const config = {
-  port: Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 3001,
+  port: Number(process.env.PORT) > 0 ? Number(process.env.PORT) : 3000,
   mongoUri: process.env.MONGODB_URI || '',
   clientOrigin: process.env.CLIENT_ORIGIN || '*',
 

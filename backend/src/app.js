@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'node:path';
+import fs from 'node:fs';
 import { config } from './config/index.js';
 import api from './routes/index.js';
 import { requestLog } from './middleware/requestLog.js';
@@ -21,10 +23,23 @@ export function createApp() {
   app.use('/api', rateLimit());
   app.use('/api', api);
 
-  // Friendly root so a human hitting the deployed API URL sees something useful.
-  app.get('/', (_req, res) => {
-    res.json({ name: 'CarbonPulse API', docs: '/api/docs', health: '/api/health' });
-  });
+  const distDir = path.resolve(process.cwd(), 'frontend/dist');
+  if (process.env.NODE_ENV !== 'test' && fs.existsSync(distDir)) {
+    app.use(express.static(distDir));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api')) return next();
+      const indexPath = path.join(distDir, 'index.html');
+      if (fs.existsSync(indexPath)) {
+        return res.sendFile(indexPath);
+      }
+      next();
+    });
+  } else {
+    // Friendly root so a human hitting the deployed API URL sees something useful.
+    app.get('/', (_req, res) => {
+      res.json({ name: 'CarbonPulse API', docs: '/api/docs', health: '/api/health' });
+    });
+  }
 
   app.use(notFound);
   app.use(errorHandler);

@@ -24,9 +24,9 @@ const { server } = createRealtimeServer();
 connectDB().then((mode) => {
   startTicks();
 
-  server.listen(config.port, () => {
+  server.listen(config.port, '0.0.0.0', () => {
     console.log(`[server] CarbonPulse API listening on :${config.port} (db=${mode || dbMode()})`);
-    console.log(`[server] websocket: ws://localhost:${config.port}${WS_PATH}`);
-    console.log(`[server] docs: http://localhost:${config.port}/api/docs`);
+    console.log(`[server] websocket: ws://0.0.0.0:${config.port}${WS_PATH}`);
+    console.log(`[server] docs: http://0.0.0.0:${config.port}/api/docs`);
   });
 });

@@ -341,7 +341,7 @@ export function trainClassifier({ extraExamples = [], testRatio = 0.25, seed = 4
 }
 
 /** Classify free-text. Returns the category only when it clears the threshold. */
-export function classify(text, classifier, { minConfidence = 0.42 } = {}) {
+export function classify(text, classifier, { minConfidence = 0.38 } = {}) {
   const tokens = tokenize(text);
   if (!tokens.length) {
     return { category: null, confidence: 0, margin: 0, ranked: [], evidence: [], tokens, needsConfirmation: true };
